@@ -1,0 +1,68 @@
+@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+
+<div class="dnnForm dnnWorkshopEdit">
+    <div class="dnnFormItem">
+        <label>Kiválasztott időpont:</label>
+        <strong id="display-date"></strong>
+    </div>
+    <div class="dnnFormItem">
+        <label>Workshop típusa:</label>
+        <select id="workshop-id" class="dnnFormInput dnnFormRequired"></select>
+    </div>
+    <div class="dnnFormItem">
+        <label>Megjegyzés / Név:</label>
+        <input type="text" id="participant-name" class="dnnFormInput" />
+    </div>
+
+    <ul class="dnnActions dnnClear">
+        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li>
+        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li>
+    </ul>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var mid = parseInt('@Dnn.ModuleContext.ModuleId');
+        var sf = $.ServicesFramework(mid);
+        var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
+
+        var selectedDate = window.parent.currentSelectedSlot;
+        if (selectedDate) {
+            $("#display-date").text(new Date(selectedDate).toLocaleString());
+        }
+
+        $.ajax({
+            url: apiRoot + "WorkshopsList",
+            method: "GET",
+            beforeSend: sf.setModuleHeaders
+        }).done(function (data) {
+            var select = $("#workshop-id");
+            $.each(data, function (i, item) {
+                select.append($("<option>").val(item.WorkshopID).text(item.Name));
+            });
+        });
+
+        $("#save-booking").click(function () {
+            var bookingData = {
+                SessionID: 0,
+                WorkshopID: $("#workshop-id").val(),
+                CreatedAt: new Date().toISOString()
+            };
+
+            $.ajax({
+                url: apiRoot + "Create",
+                method: "POST",
+                data: bookingData,
+                beforeSend: sf.setModuleHeaders
+            }).done(function () {
+                window.parent.location.reload();
+            }).fail(function (xhr) {
+                alert("Hiba: " + xhr.responseText);
+            });
+        });
+
+        $("#cancel-booking").click(function () {
+            window.parent.dnnModal.closePopUp(false);
+        });
+    });
+</script>

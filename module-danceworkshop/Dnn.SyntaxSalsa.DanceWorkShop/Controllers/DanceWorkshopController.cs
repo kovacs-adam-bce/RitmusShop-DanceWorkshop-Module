@@ -25,5 +25,25 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         {
             return View();
         }
+
+        [HttpGet]
+        public ActionResult Edit()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        [DnnModuleAuthorize(AccessLevel = DotNetNuke.Security.SecurityAccessLevel.Edit)]
+        public ActionResult Management()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        [DnnModuleAuthorize(AccessLevel = DotNetNuke.Security.SecurityAccessLevel.Edit)]
+        public ActionResult Settings()
+        {
+            return View();
+        }
     }
 }

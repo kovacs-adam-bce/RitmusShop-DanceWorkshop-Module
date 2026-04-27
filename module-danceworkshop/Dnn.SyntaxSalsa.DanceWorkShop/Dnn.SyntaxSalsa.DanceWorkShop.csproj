@@ -84,6 +84,11 @@
     <Reference Include="System.Buffers, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
     </Reference>
+    <Reference Include="System.Linq, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Linq.4.3.0\lib\net463\System.Linq.dll</HintPath>
+      <Private>True</Private>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Memory, Version=4.0.1.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Memory.4.5.5\lib\net461\System.Memory.dll</HintPath>
     </Reference>
@@ -167,6 +172,7 @@
     <Compile Include="RouteMapper.cs" />
     <Compile Include="Services\DanceWorkshopBookingManager.cs" />
     <Compile Include="Services\DanceWorkshopException.cs" />
+    <Compile Include="Services\DanceWorkshopNotificationService.cs" />
     <Compile Include="Services\IDanceWorkshopBookingManager.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -210,6 +216,10 @@
     <Content Include="Views\Item\Index.cshtml" />
     <Content Include="Views\Item\Edit.cshtml" />
     <Content Include="Views\Settings\Settings.cshtml" />
+    <Content Include="Views\DanceWorkShop\Index.cshtml" />
+    <Content Include="Views\DanceWorkShop\Edit.cshtml" />
+    <Content Include="Views\DanceWorkShop\Management.cshtml" />
+    <Content Include="Views\DanceWorkShop\Settings.cshtml" />
     <None Include="Web.Debug.config">
       <DependentUpon>Web.config</DependentUpon>
     </None>

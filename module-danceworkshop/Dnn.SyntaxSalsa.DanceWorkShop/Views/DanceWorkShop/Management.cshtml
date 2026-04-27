@@ -1,0 +1,173 @@
+@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+
+<div class="dnnForm dnnWorkshopAdmin">
+    <div class="dnnFormHeader">
+        <h2>Workshop Kezelés</h2>
+    </div>
+
+    <div style="display: flex; gap: 20px; margin-bottom: 30px; align-items: flex-start;">
+        <div style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #f9f9f9;">
+            <h3>Új Workshop létrehozása</h3>
+            <div class="dnnFormItem">
+                <label>Név:</label>
+                <input type="text" id="new-ws-name" class="dnnFormInput" />
+            </div>
+            <div class="dnnFormItem">
+                <label>Kategória:</label>
+                <input type="text" id="new-ws-category" class="dnnFormInput" />
+            </div>
+            <button type="button" id="btn-save-workshop" class="dnnPrimaryAction">Workshop mentése</button>
+        </div>
+
+        <div style="flex: 1; border: 1px solid #ddd; padding: 15px; background: #f9f9f9;">
+            <h3>Időpont (Session) meghirdetése</h3>
+            <div class="dnnFormItem">
+                <label>Workshop:</label>
+                <select id="session-ws-id" class="dnnFormInput"></select>
+            </div>
+            <div class="dnnFormItem">
+                <label>Kezdés:</label>
+                <input type="datetime-local" id="session-start" class="dnnFormInput" />
+            </div>
+            <div class="dnnFormItem">
+                <label>Kapacitás:</label>
+                <input type="number" id="session-capacity" class="dnnFormInput" value="10" />
+            </div>
+            <button type="button" id="btn-save-session" class="dnnPrimaryAction">Időpont rögzítése</button>
+        </div>
+    </div>
+
+    <div class="dnnFormHeader">
+        <h2>Foglalások kezelése</h2>
+    </div>
+
+    <div class="dnnFormItem">
+        <div class="admin-filters">
+            <input type="text" id="admin-search" placeholder="Név keresése..." class="dnnFormInput" />
+            <button type="button" id="refresh-list" class="dnnSecondaryAction">Frissítés</button>
+        </div>
+    </div>
+
+    <table class="dnnTable" id="bookings-admin-table">
+        <thead>
+            <tr>
+                <th>Időpont</th>
+                <th>Workshop</th>
+                <th>Résztvevő</th>
+                <th>Dátum</th>
+                <th>Állapot</th>
+                <th>Műveletek</th>
+            </tr>
+        </thead>
+        <tbody id="admin-booking-list"></tbody>
+    </table>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var mid = parseInt('@Dnn.ModuleContext.ModuleId');
+        var sf = $.ServicesFramework(mid);
+        var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
+
+        function loadAllBookings() {
+            $.ajax({
+                url: apiRoot + "GetAllBookings",
+                method: "GET",
+                beforeSend: sf.setModuleHeaders
+            }).done(function (data) {
+                var container = $("#admin-booking-list");
+                container.empty();
+
+                $.each(data, function (i, item) {
+                    var row = $("<tr>");
+                    var statusClass = item.IsCancelled ? "dnnFormMessage dnnFormWarning" : "dnnFormMessage dnnFormSuccess";
+                    var statusText = item.IsCancelled ? "Visszamondva" : "Aktív";
+
+                    row.append("<td>" + new Date(item.SessionStart).toLocaleString() + "</td>");
+                    row.append("<td>" + (item.WorkshopName || "Ismeretlen") + "</td>");
+                    row.append("<td>" + item.Username + "</td>");
+                    row.append("<td>" + new Date(item.CreatedAt).toLocaleDateString() + "</td>");
+                    row.append("<td><span class='" + statusClass + "' style='padding:2px 5px; margin:0;'>" + statusText + "</span></td>");
+
+                    var actions = $("<td>");
+                    if (!item.IsCancelled) {
+                        var cancelBtn = $("<button>").text("Törlés").addClass("dnnSecondaryAction").on("click", function() {
+                            cancelBooking(item.BookingID);
+                        });
+                        actions.append(cancelBtn);
+                    }
+                    row.append(actions);
+
+                    container.append(row);
+                });
+            });
+        }
+
+        function loadWorkshopsToSelect() {
+            $.ajax({
+                url: apiRoot + "WorkshopsList",
+                method: "GET",
+                beforeSend: sf.setModuleHeaders
+            }).done(function(data) {
+                var select = $("#session-ws-id");
+                select.empty();
+                $.each(data, function(i, item) {
+                    select.append($("<option>").val(item.WorkshopID).text(item.Name));
+                });
+            });
+        }
+
+        function cancelBooking(id) {
+            if (confirm("Biztosan törölni szeretnéd ezt a foglalást?")) {
+                $.ajax({
+                    url: apiRoot + "Cancel/" + id,
+                    method: "POST",
+                    beforeSend: sf.setModuleHeaders
+                }).done(function () {
+                    loadAllBookings();
+                });
+            }
+        }
+
+        $("#btn-save-workshop").on("click", function() {
+            var wsData = {
+                Name: $("#new-ws-name").val(),
+                Category: $("#new-ws-category").val()
+            };
+
+            $.ajax({
+                url: apiRoot + "SaveWorkshop",
+                method: "POST",
+                data: wsData,
+                beforeSend: sf.setModuleHeaders
+            }).done(function() {
+                $("#new-ws-name, #new-ws-category").val("");
+                loadWorkshopsToSelect();
+                alert("Workshop sikeresen létrehozva!");
+            });
+        });
+
+        $("#btn-save-session").on("click", function() {
+            var sessionData = {
+                WorkshopID: $("#session-ws-id").val(),
+                Start: $("#session-start").val(),
+                Capacity: $("#session-capacity").val()
+            };
+
+            $.ajax({
+                url: apiRoot + "SaveSession",
+                method: "POST",
+                data: sessionData,
+                beforeSend: sf.setModuleHeaders
+            }).done(function() {
+                alert("Időpont sikeresen meghirdetve!");
+                loadAllBookings();
+            });
+        });
+
+        $("#refresh-list").click(loadAllBookings);
+
+        loadWorkshopsToSelect();
+        loadAllBookings();
+    });
+</script>

@@ -1,0 +1,114 @@
+@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+
+<div id="workshop-calendar-@Dnn.ModuleContext.ModuleId" class="dance-workshop-container">
+    <div class="calendar-header">
+        <h2 id="calendar-title">Workshopok</h2>
+        <div class="calendar-controls">
+            <button type="button" id="btn-prev-week" class="dnnSecondaryAction">Előző hét</button>
+            <button type="button" id="btn-this-week" class="dnnPrimaryAction">Aktuális hét</button>
+            <button type="button" id="btn-next-week" class="dnnSecondaryAction">Következő hét</button>
+            <select id="jump-to-week" class="dnnFormInput"></select>
+        </div>
+    </div>
+
+    <div class="calendar-scroll">
+        <table class="dnnTable calendar-table">
+            <thead>
+                <tr id="calendar-days">
+                    <th>Időpont (Helyi / UTC)</th>
+                </tr>
+            </thead>
+            <tbody id="calendar-slots"></tbody>
+        </table>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var mid = parseInt('@Dnn.ModuleContext.ModuleId');
+        var sf = $.ServicesFramework(mid);
+        var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
+        var currentWeekOffset = 0;
+
+        function getStartOfWeek(offset) {
+            var now = new Date();
+            var day = now.getDay() || 7;
+            var monday = new Date(now);
+            monday.setDate(now.getDate() - day + 1 + (offset * 7));
+            monday.setHours(0, 0, 0, 0);
+            return monday;
+        }
+
+        function renderCalendar() {
+            var start = getStartOfWeek(currentWeekOffset);
+            var end = new Date(start);
+            end.setDate(start.getDate() + 6);
+
+            $("#calendar-title").text(start.toLocaleDateString() + " - " + end.toLocaleDateString());
+            $("#calendar-days").find("th:gt(0)").remove();
+            $("#calendar-slots").empty();
+
+            for (var i = 0; i < 7; i++) {
+                var d = new Date(start);
+                d.setDate(start.getDate() + i);
+                $("#calendar-days").append("<th>" + d.toLocaleDateString('hu-HU', { weekday: 'long', month: 'short', day: 'numeric' }) + "</th>");
+            }
+
+            $.ajax({
+                url: apiRoot + "SessionsList",
+                method: "GET",
+                data: { year: start.getFullYear(), week: 1 },
+                beforeSend: sf.setModuleHeaders
+            }).done(function (sessions) {
+                for (var hour = 8; hour <= 20; hour++) {
+                    var row = $("<tr>");
+                    var offset = new Date().getTimezoneOffset() / 60;
+                    var utcHour = hour + offset;
+                    row.append("<td><b>" + hour + ":00</b><br/><small>UTC: " + utcHour + ":00</small></td>");
+
+                    for (var day = 0; day < 7; day++) {
+                        var slotDate = new Date(start);
+                        slotDate.setDate(start.getDate() + day);
+                        slotDate.setHours(hour, 0, 0, 0);
+
+                        var cell = $("<td>").addClass("calendar-cell");
+                        applySlotStyle(cell, slotDate, sessions);
+                        row.append(cell);
+                    }
+                    $("#calendar-slots").append(row);
+                }
+            });
+        }
+
+        function applySlotStyle(cell, slotDate, sessions) {
+            var now = new Date();
+            var diffMs = slotDate - now;
+            var diffHours = diffMs / (1000 * 60 * 60);
+
+            var session = null;
+            if (sessions && sessions.length) {
+                for (var i = 0; i < sessions.length; i++) {
+                    if (new Date(sessions[i].Start).getTime() === slotDate.getTime()) {
+                        session = sessions[i];
+                        break;
+                    }
+                }
+            }
+
+            if (slotDate < now || diffHours < 24) {
+                cell.addClass("dw-slot-past").text("Zárt");
+            } else if (!session) {
+                cell.addClass("dw-slot-free").text("Szabad");
+            } else if (session.IsFull) {
+                cell.addClass("dw-slot-free").text("Szabad").css("cursor", "pointer").on("click", function() {
+                window.currentSelectedSlot = slotDate;
+                var url = "@Url.Action("Edit", "DanceWorkshop")";
+                dnnModal.show(url + "?mid=" + mid, false, 400, 550, true);});
+            } else {
+                cell.addClass("dw-slot-own").text("Saját");
+            }
+        }
+
+        renderCalendar();
+    });
+</script>
