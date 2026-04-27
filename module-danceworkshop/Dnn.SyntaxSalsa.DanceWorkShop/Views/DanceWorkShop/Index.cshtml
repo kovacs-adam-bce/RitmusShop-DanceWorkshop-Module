@@ -88,6 +88,7 @@
             var session = null;
             if (sessions && sessions.length) {
                 for (var i = 0; i < sessions.length; i++) {
+                    // Itt keressük meg a slotnak megfelelő meghirdetett órát
                     if (new Date(sessions[i].Start).getTime() === slotDate.getTime()) {
                         session = sessions[i];
                         break;
@@ -95,19 +96,33 @@
                 }
             }
 
+            // 1. Ha már elmúlt az időpont vagy 24 órán belül van
             if (slotDate < now || diffHours < 24) {
                 cell.addClass("dw-slot-past").text("Zárt");
-            } else if (!session) {
-                cell.addClass("dw-slot-free").text("Szabad");
-            } else if (session.IsFull) {
+            }
+            // 2. Ha nincs erre az időpontra óra meghirdetve
+            else if (!session) {
+                cell.addClass("dw-slot-free").text("Nincs óra").css("opacity", "0.5");
+            }
+            // 3. Ha az óra betelt (ezt az API-ból kapjuk már)
+            else if (session.IsFull) {
+                cell.addClass("dw-slot-full").text("Betelt");
+            }
+            // 4. Szabad óra, lehet foglalni
+            else {
                 cell.addClass("dw-slot-free").text("Szabad").css("cursor", "pointer").on("click", function() {
-                window.currentSelectedSlot = slotDate;
-                var url = "@Url.Action("Edit", "DanceWorkshop")";
-                dnnModal.show(url + "?mid=" + mid, false, 400, 550, true);});
-            } else {
-                cell.addClass("dw-slot-own").text("Saját");
+                    window.currentSelectedSlot = slotDate;
+                    var url = "@Url.Action("Edit", "DanceWorkshop")";
+                    // Itt adjuk át a SessionID-t a popupnak
+                    dnnModal.show(url + "?mid=" + mid + "&sessionId=" + session.SessionID, false, 400, 550, true);
+                });
             }
         }
+
+        // Navigációs gombok bekötése
+        $("#btn-prev-week").click(function() { currentWeekOffset--; renderCalendar(); });
+        $("#btn-next-week").click(function() { currentWeekOffset++; renderCalendar(); });
+        $("#btn-this-week").click(function() { currentWeekOffset = 0; renderCalendar(); });
 
         renderCalendar();
     });

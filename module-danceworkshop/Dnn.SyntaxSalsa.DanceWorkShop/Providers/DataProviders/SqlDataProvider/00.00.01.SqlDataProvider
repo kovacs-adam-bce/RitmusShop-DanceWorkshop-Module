@@ -7,7 +7,7 @@
 /***** *****/
 /************************************************************/
 
-/* 1. MEGLÉVŐ TÁBLÁK TÖRLÉSE (Fordított sorrendben a kényszerek miatt) */
+
 
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopBookings]') AND type in (N'U'))
 DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopBookings]
@@ -26,9 +26,7 @@ DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopParticipants]
 GO
 
 
-/* 2. TÁBLÁK LÉTREHOZÁSA */
 
--- Workshop típusok táblája [cite: 161]
 CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshops
 (
     [WorkshopID] INT NOT NULL IDENTITY (1, 1),
@@ -41,7 +39,8 @@ CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshops
 ) ON [PRIMARY]
 GO
 
--- Workshop alkalmak (Sessions) táblája [cite: 163]
+
+
 CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions
 (
     [SessionID] INT NOT NULL IDENTITY (1, 1),
@@ -52,7 +51,8 @@ CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions
 ) ON [PRIMARY]
 GO
 
--- Résztvevők táblája [cite: 167]
+
+
 CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopParticipants
 (
     [ParticipantID] INT NOT NULL IDENTITY (1, 1),
@@ -63,7 +63,8 @@ CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopParticipants
 ) ON [PRIMARY]
 GO
 
--- Foglalások táblája [cite: 165]
+
+
 CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings
 (
     [BookingID] INT NOT NULL IDENTITY (1, 1),
@@ -76,17 +77,13 @@ CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings
 GO
 
 
-/* 3. IDEGEN KULCSOK (FOREIGN KEYS) BEÁLLÍTÁSA */
+
 
 ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions ADD CONSTRAINT
     FK_{objectQualifier}DanceWorkshopSessions_DanceWorkshops FOREIGN KEY ([WorkshopID]) 
     REFERENCES {databaseOwner}{objectQualifier}DanceWorkshops ([WorkshopID]) ON DELETE CASCADE
 GO
 
-ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
-    FK_{objectQualifier}DanceWorkshopBookings_Participants FOREIGN KEY ([CreatedBy]) 
-    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshopParticipants ([ParticipantID])
-GO
 
 ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
     FK_{objectQualifier}DanceWorkshopBookings_Sessions FOREIGN KEY ([SessionID]) 
@@ -94,7 +91,7 @@ ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
 GO
 
 
-/* 4. INDEXEK A GYORSABB KERESÉSHEZ */
+
 
 CREATE INDEX [IX_{objectQualifier}DanceWorkshops_ModuleId] ON {databaseOwner}{objectQualifier}DanceWorkshops ([ModuleId])
 GO

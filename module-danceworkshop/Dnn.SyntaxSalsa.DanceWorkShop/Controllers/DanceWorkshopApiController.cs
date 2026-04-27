@@ -48,8 +48,18 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             {
                 using (IDataContext ctx = DataContext.Instance())
                 {
-                    var sessions = ctx.GetRepository<DanceWorkshopSession>().Get();
-                    return Request.CreateResponse(HttpStatusCode.OK, sessions);
+                    var sessions = ctx.GetRepository<DanceWorkshopSession>().Get().ToList();
+                    var bookings = ctx.GetRepository<DanceWorkshopBooking>().Find("WHERE IsCancelled = 0").ToList();
+
+                    var result = sessions.Select(s => new {
+                        s.SessionID,
+                        s.WorkshopID,
+                        s.Start,
+                        s.Capacity,
+                        IsFull = bookings.Count(b => b.SessionID == s.SessionID) >= s.Capacity
+                    });
+
+                    return Request.CreateResponse(HttpStatusCode.OK, result);
                 }
             }
             catch (Exception ex)
@@ -134,7 +144,8 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                     var sessions = ctx.GetRepository<DanceWorkshopSession>().Get().ToList();
                     var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID).ToList();
 
-                    var result = bookings.Select(b => new {
+                    var result = bookings.Select(b => new
+                    {
                         b.BookingID,
                         b.CreatedAt,
                         b.IsCancelled,

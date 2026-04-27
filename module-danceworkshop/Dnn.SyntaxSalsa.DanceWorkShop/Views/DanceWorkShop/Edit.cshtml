@@ -15,8 +15,8 @@
     </div>
 
     <ul class="dnnActions dnnClear">
-        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li>
-        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li>
+        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li> [cite: 8]
+        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li> [cite: 8]
     </ul>
 </div>
 
@@ -26,10 +26,16 @@
         var sf = $.ServicesFramework(mid);
         var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
 
-        var selectedDate = window.parent.currentSelectedSlot;
+
+        var urlParams = new URLSearchParams(window.location.search);
+        var sessionId = parseInt(urlParams.get('sessionId')) || 0;
+
+
+        var selectedDate = window.parent.currentSelectedSlot; [cite: 9]
         if (selectedDate) {
-            $("#display-date").text(new Date(selectedDate).toLocaleString());
+            $("#display-date").text(new Date(selectedDate).toLocaleString()); [cite: 9, 10]
         }
+
 
         $.ajax({
             url: apiRoot + "WorkshopsList",
@@ -38,31 +44,31 @@
         }).done(function (data) {
             var select = $("#workshop-id");
             $.each(data, function (i, item) {
-                select.append($("<option>").val(item.WorkshopID).text(item.Name));
+                select.append($("<option>").val(item.WorkshopID).text(item.Name)); [cite: 11]
             });
         });
 
         $("#save-booking").click(function () {
             var bookingData = {
-                SessionID: 0,
+                SessionID: sessionId,
                 WorkshopID: $("#workshop-id").val(),
                 CreatedAt: new Date().toISOString()
             };
 
             $.ajax({
-                url: apiRoot + "Create",
+                url: apiRoot + "Create", [cite: 13]
                 method: "POST",
                 data: bookingData,
                 beforeSend: sf.setModuleHeaders
             }).done(function () {
-                window.parent.location.reload();
+                window.parent.location.reload(); [cite: 13]
             }).fail(function (xhr) {
-                alert("Hiba: " + xhr.responseText);
+                alert("Hiba: " + xhr.responseText); [cite: 14]
             });
         });
 
         $("#cancel-booking").click(function () {
-            window.parent.dnnModal.closePopUp(false);
+            window.parent.dnnModal.closePopUp(false); [cite: 15]
         });
     });
 </script>
