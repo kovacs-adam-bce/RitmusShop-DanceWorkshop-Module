@@ -15,8 +15,8 @@
     </div>
 
     <ul class="dnnActions dnnClear">
-        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li> [cite: 8]
-        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li> [cite: 8]
+        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li>
+        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li>
     </ul>
 </div>
 
@@ -31,9 +31,9 @@
         var sessionId = parseInt(urlParams.get('sessionId')) || 0;
 
 
-        var selectedDate = window.parent.currentSelectedSlot; [cite: 9]
+        var selectedDate = window.parent.currentSelectedSlot;
         if (selectedDate) {
-            $("#display-date").text(new Date(selectedDate).toLocaleString()); [cite: 9, 10]
+            $("#display-date").text(new Date(selectedDate).toLocaleString());
         }
 
 
@@ -44,7 +44,7 @@
         }).done(function (data) {
             var select = $("#workshop-id");
             $.each(data, function (i, item) {
-                select.append($("<option>").val(item.WorkshopID).text(item.Name)); [cite: 11]
+                select.append($("<option>").val(item.WorkshopID).text(item.Name));
             });
         });
 
@@ -56,19 +56,19 @@
             };
 
             $.ajax({
-                url: apiRoot + "Create", [cite: 13]
+                url: apiRoot + "Create",
                 method: "POST",
                 data: bookingData,
                 beforeSend: sf.setModuleHeaders
             }).done(function () {
-                window.parent.location.reload(); [cite: 13]
+                window.parent.location.reload();
             }).fail(function (xhr) {
-                alert("Hiba: " + xhr.responseText); [cite: 14]
+                alert("Hiba: " + xhr.responseText);
             });
         });
 
         $("#cancel-booking").click(function () {
-            window.parent.dnnModal.closePopUp(false); [cite: 15]
+            window.parent.dnnModal.closePopUp(false);
         });
     });
 </script>

@@ -1,33 +1,23 @@
-﻿@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage<IEnumerable< DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Models.Item >>
-
-@using System.Text.RegularExpressions
-@using DotNetNuke.Web.Mvc.Helpers
-
+﻿@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage<IEnumerable<DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Models.Item>>
 
 <div id="Items-@Dnn.ModuleContext.ModuleId">
-    @if (Model.Count() == 0)
+    @if (Model == null || !Model.Any())
     {
-        <p>@Dnn.LocalizeString("NoItems")</p>
+        <p>Nincsenek megjeleníthető minta elemek. (Ez a sablon alapértelmezett nézete.)</p>
     }
     else
     {
-        <ul class="tm_tl">
+        <ul>
             @foreach (var item in Model)
             {
-                <li class="tm_t">
-                    <h3>@item.ItemName</h3>
-                    <div class="tm_td">@item.ItemDescription</div>
-                    @{
-                        if (Dnn.ModuleContext.IsEditable)
-                        {
-                            <div>
-                                <a href="@Url.Action("Edit", "Item", new {ctl = "Edit", itemId = item.ItemId})">@Dnn.LocalizeString("EditItem")</a>
-                                <a href="@Url.Action("Delete", "Item", new {itemId = item.ItemId})">@Dnn.LocalizeString("DeleteItem")</a>
-                            </div>
-                        }
-                    }
-                </li>
+                <li>@item.ItemName</li>
             }
         </ul>
     }
+
+    <hr />
+    <div style="background: #fff3cd; padding: 15px; border: 1px solid #ffeeba;">
+        <strong>Fejlesztői üzenet:</strong> Ez még a sablon alapértelmezett nézete.
+        A naptárhoz menj a modul beállításaiba, és válaszd a <strong>DanceWorkshop / Index</strong> nézetet!
+    </div>
 </div>
