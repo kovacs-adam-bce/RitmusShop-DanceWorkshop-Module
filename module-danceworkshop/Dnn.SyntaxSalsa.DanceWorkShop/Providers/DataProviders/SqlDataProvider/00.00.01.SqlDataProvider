@@ -1,42 +1,103 @@
 ﻿/************************************************************/
-/*****              SqlDataProvider                     *****/
-/*****                                                  *****/
-/*****                                                  *****/
+/***** SqlDataProvider                     *****/
+/***** *****/
 /***** Note: To manually execute this script you must   *****/
-/*****       perform a search and replace operation     *****/
-/*****       for {databaseOwner} and {objectQualifier}  *****/
-/*****                                                  *****/
+/***** perform a search and replace operation     *****/
+/***** for {databaseOwner} and {objectQualifier}  *****/
+/***** *****/
 /************************************************************/
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}Dnn.SyntaxSalsa.DanceWorkShop_Items]') AND type in (N'U'))
-DROP TABLE {databaseOwner}[{objectQualifier}Dnn.SyntaxSalsa.DanceWorkShop_Items]
+/* 1. MEGLÉVŐ TÁBLÁK TÖRLÉSE (Fordított sorrendben a kényszerek miatt) */
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopBookings]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopBookings]
 GO
 
-CREATE TABLE {databaseOwner}{objectQualifier}Dnn.SyntaxSalsa.DanceWorkShop_Items
-    (
-    ItemId int NOT NULL IDENTITY (1, 1),
-    ItemName nvarchar(MAX) NOT NULL,
-    ItemDescription nvarchar(MAX) NOT NULL,
-    AssignedUserId int NULL,
-    ModuleId int NOT NULL,
-    CreatedOnDate datetime NOT NULL,
-    CreatedByUserId int NOT NULL,
-    LastModifiedOnDate datetime NOT NULL,
-    LastModifiedByUserId int NOT NULL
-    )  ON [PRIMARY]
-     TEXTIMAGE_ON [PRIMARY]
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopSessions]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopSessions]
 GO
 
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshops]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshops]
+GO
 
-ALTER TABLE {databaseOwner}{objectQualifier}Dnn.SyntaxSalsa.DanceWorkShop_Items ADD CONSTRAINT
-    PK_{objectQualifier}Dnn.SyntaxSalsa.DanceWorkShop_Items PRIMARY KEY CLUSTERED 
-    (
-    ItemId
-    ) WITH( STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopParticipants]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopParticipants]
 GO
 
 
-/************************************************************/
-/*****              SqlDataProvider                     *****/
-/************************************************************/
+/* 2. TÁBLÁK LÉTREHOZÁSA */
+
+-- Workshop típusok táblája [cite: 161]
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshops
+(
+    [WorkshopID] INT NOT NULL IDENTITY (1, 1),
+    [ModuleId] INT NOT NULL, -- DNN instanciák szétválasztásához [cite: 1606]
+    [Name] NVARCHAR(255) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL, -- HTML formázott szöveg [cite: 161]
+    [Price] INT NOT NULL,
+    [Level] NVARCHAR(100) NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshops] PRIMARY KEY CLUSTERED ([WorkshopID])
+) ON [PRIMARY]
+GO
+
+-- Workshop alkalmak (Sessions) táblája [cite: 163]
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions
+(
+    [SessionID] INT NOT NULL IDENTITY (1, 1),
+    [WorkshopID] INT NOT NULL,
+    [Start] DATETIME NOT NULL, -- UTC-ben tárolva! [cite: 138, 163]
+    [Capacity] INT NOT NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopSessions] PRIMARY KEY CLUSTERED ([SessionID])
+) ON [PRIMARY]
+GO
+
+-- Résztvevők táblája [cite: 167]
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopParticipants
+(
+    [ParticipantID] INT NOT NULL IDENTITY (1, 1),
+    [ParticipantName] NVARCHAR(255) NOT NULL,
+    [ParticipantMail] NVARCHAR(255) NOT NULL,
+    [ParticipantPhone] NVARCHAR(50) NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopParticipants] PRIMARY KEY CLUSTERED ([ParticipantID])
+) ON [PRIMARY]
+GO
+
+-- Foglalások táblája [cite: 165]
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings
+(
+    [BookingID] INT NOT NULL IDENTITY (1, 1),
+    [CreatedBy] INT NOT NULL, -- FK a Participants táblára [cite: 165]
+    [SessionID] INT NOT NULL, -- FK a Sessions táblára [cite: 165]
+    [CreatedAt] DATETIME NOT NULL DEFAULT GETDATE(),
+    [IsCancelled] BIT NOT NULL DEFAULT 0,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopBookings] PRIMARY KEY CLUSTERED ([BookingID])
+) ON [PRIMARY]
+GO
+
+
+/* 3. IDEGEN KULCSOK (FOREIGN KEYS) BEÁLLÍTÁSA */
+
+ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions ADD CONSTRAINT
+    FK_{objectQualifier}DanceWorkshopSessions_DanceWorkshops FOREIGN KEY ([WorkshopID]) 
+    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshops ([WorkshopID]) ON DELETE CASCADE
+GO
+
+ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
+    FK_{objectQualifier}DanceWorkshopBookings_Participants FOREIGN KEY ([CreatedBy]) 
+    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshopParticipants ([ParticipantID])
+GO
+
+ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
+    FK_{objectQualifier}DanceWorkshopBookings_Sessions FOREIGN KEY ([SessionID]) 
+    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshopSessions ([SessionID])
+GO
+
+
+/* 4. INDEXEK A GYORSABB KERESÉSHEZ */
+
+CREATE INDEX [IX_{objectQualifier}DanceWorkshops_ModuleId] ON {databaseOwner}{objectQualifier}DanceWorkshops ([ModuleId])
+GO
+
+CREATE INDEX [IX_{objectQualifier}DanceWorkshopSessions_Start] ON {databaseOwner}{objectQualifier}DanceWorkshopSessions ([Start])
+GO
