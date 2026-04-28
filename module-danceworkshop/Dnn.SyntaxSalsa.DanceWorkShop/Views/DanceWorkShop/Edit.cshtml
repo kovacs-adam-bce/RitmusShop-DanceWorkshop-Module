@@ -1,6 +1,5 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 @using DotNetNuke.Framework.JavaScriptLibraries
-
 @{
     JavaScript.RequestRegistration(CommonJs.DnnPlugins);
     JavaScript.RequestRegistration(CommonJs.jQuery);
@@ -12,16 +11,10 @@
 
     <fieldset>
         <div class="dnnFormItem">
-            <label>Időpont (Helyi):</label>
+            <label>Időpont:</label>
             <strong id="display-local-time">Betöltés...</strong>
         </div>
-        <div class="dnnFormItem">
-            <label>Időpont (UTC):</label>
-            <strong id="display-utc-time">Betöltés...</strong>
-        </div>
-
         <hr />
-
         <div class="dnnFormItem">
             <label>Résztvevő neve:</label>
             <input type="text" id="participant-name" class="dnnFormInput" placeholder="Teljes név" />
@@ -37,8 +30,8 @@
     </fieldset>
 
     <ul class="dnnActions dnnClear">
-        <li><a id="btn-main-action" class="dnnPrimaryAction">Foglalás</a></li>
-        <li><a id="btn-close" class="dnnSecondaryAction">Mégse</a></li>
+        <li><a id="btn-main-action" class="dnnPrimaryAction">Megerősítés</a></li>
+        @* A Mégse / Bezárás gombok eltávolítva *@
     </ul>
 </div>
 
@@ -46,64 +39,55 @@
     $(document).ready(function () {
         var mid = parseInt('@Dnn.ModuleContext.ModuleId');
         var sf = $.ServicesFramework(mid);
-        var serviceRoot = 'YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop';
-        var apiRoot = sf.getServiceRoot(serviceRoot) + "DanceWorkshopApi/";
+        var apiRoot = sf.getServiceRoot('YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop') + "DanceWorkshopApi/";
 
         var urlParams = new URLSearchParams(window.location.search);
-        var sessionId = parseInt(urlParams.get('sessionId')) || 0;
+        var id = parseInt(urlParams.get('sessionId')) || 0;
         var isViewer = urlParams.get('view') === 'true';
         var dateParam = urlParams.get('d');
 
         if (dateParam) {
-            var dateObj = new Date(decodeURIComponent(dateParam));
-            $("#display-local-time").text(dateObj.toLocaleString('hu-HU'));
-            var utcStr = dateObj.toISOString().replace('T', ', ').substring(0, 17);
-            $("#display-utc-time").text(utcStr);
-            if (isViewer) $("#modal-title").text("Foglalás – " + utcStr);
+            $("#display-local-time").text(new Date(decodeURIComponent(dateParam)).toLocaleString('hu-HU'));
         }
 
         if (isViewer) {
+            $("#modal-title").text("Foglalás lemondása");
+            $("#btn-main-action").text("Lemondás megerősítése").addClass("dnnFormWarning");
             $(".dnnFormInput").prop("disabled", true);
-            $("#btn-main-action").text("Lemondás").addClass("dnnFormWarning");
-            $("#btn-close").text("Bezárás");
         }
 
         $("#btn-main-action").on("click", function (e) {
             e.preventDefault();
-            var $btn = $(this);
-            if ($btn.hasClass("disabled")) return;
-
             if (isViewer) {
                 if (confirm("Biztosan lemondja ezt a foglalást?")) {
-                    $btn.addClass("disabled");
-                    $.ajax({ url: apiRoot + "CancelBooking?id=" + sessionId, method: "POST", beforeSend: sf.setModuleHeaders }).done(function() { window.parent.location.reload(); }).fail(handleAjaxError);
+                    $.ajax({
+                        url: apiRoot + "CancelBooking/" + id,
+                        method: "POST",
+                        beforeSend: sf.setModuleHeaders
+                    }).done(function() {
+                        alert("Sikeresen lemondva!");
+                        window.parent.location.reload();
+                    });
                 }
             } else {
-                var name = $("#participant-name").val();
-                var email = $("#participant-email").val();
-                if (!name || !email) { alert("A név és az email kitöltése kötelező!"); return; }
-                var bookingData = { SessionID: sessionId, ParticipantName: name, ParticipantMail: email, ParticipantPhone: $("#participant-phone").val() };
-                $btn.addClass("disabled");
-                $.ajax({ url: apiRoot + "CreateBooking", method: "POST", data: bookingData, beforeSend: sf.setModuleHeaders }).done(function () { window.parent.location.reload(); }).fail(handleAjaxError);
+                var bookingData = {
+                    SessionID: id,
+                    ParticipantName: $("#participant-name").val(),
+                    ParticipantMail: $("#participant-email").val(),
+                    ParticipantPhone: $("#participant-phone").val()
+                };
+                if (!bookingData.ParticipantName || !bookingData.ParticipantMail) { alert("Név és email kötelező!"); return; }
+
+                $.ajax({
+                    url: apiRoot + "CreateBooking",
+                    method: "POST",
+                    data: bookingData,
+                    beforeSend: sf.setModuleHeaders
+                }).done(function () {
+                    alert("Köszönjük! A foglalásod sikeresen rögzítettük.");
+                    window.parent.location.reload();
+                });
             }
         });
-
-        $("#btn-close").on("click", function (e) {
-            e.preventDefault();
-            if (window.parent && window.parent.dnnModal) {
-                window.parent.dnnModal.closePopUp(false);
-            } else if (window.parent && window.parent.$) {
-                window.parent.$(".ui-dialog-content").dialog("close");
-            } else {
-                window.close();
-            }
-        });
-
-        function handleAjaxError(xhr) {
-            $("#btn-main-action").removeClass("disabled");
-            var message = "Hiba történt a művelet során.";
-            try { var resp = JSON.parse(xhr.responseText); message = resp.message || "Hiba: " + xhr.statusText; } catch(err) { }
-            $("#validation-summary").empty().append("<strong>Hiba:</strong> " + message).show();
-        }
     });
 </script>

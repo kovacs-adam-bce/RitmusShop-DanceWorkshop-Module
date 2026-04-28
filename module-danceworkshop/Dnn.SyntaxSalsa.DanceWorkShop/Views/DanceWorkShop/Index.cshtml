@@ -237,8 +237,7 @@
                     $("#calendar-slots").append(row);
                 }
             }).fail(function(xhr) {
-                var errorMsg = xhr.status === 401 ? "Jogosultsági hiba (401). Ellenőrizd a kontroller SupportedModules beállítását!" : "Hiba: " + xhr.status;
-                $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>" + errorMsg + "</td></tr>");
+                $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>Hiba: " + xhr.status + "</td></tr>");
             });
         }
 
@@ -248,7 +247,10 @@
             var session = sessions ? sessions.find(s => new Date(s.Start).getTime() === slotDate.getTime()) : null;
 
             if (session && session.UserBookingID > 0) {
-                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function () { openModal(session.SessionID, true, slotDate); });
+                // JAVÍTÁS: Itt a foglalás ID-t (UserBookingID) adjuk át a lemondáshoz, nem a SessionID-t!
+                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function () {
+                    openModal(session.UserBookingID, true, slotDate);
+                });
             }
             else if (slotDate < now || diffHours < 24) {
                 cell.addClass("dw-slot-past").text(session ? (session.IsFull ? "Betelt" : "Zárt") : "-");
@@ -264,14 +266,17 @@
                 if (session.WorkshopLevel) {
                     content += "<br/><small>(" + session.WorkshopLevel + ")</small>";
                 }
-                cell.addClass("dw-slot-free").html(content).on("click", function () { openModal(session.SessionID, false, slotDate); });
+                cell.addClass("dw-slot-free").html(content).on("click", function () {
+                    openModal(session.SessionID, false, slotDate);
+                });
             }
         }
 
-        function openModal(sessionId, isViewer, slotDate) {
+        function openModal(id, isViewer, slotDate) {
             var url = "@Url.Action("Edit", "DanceWorkshop")";
             var dateStr = encodeURIComponent(slotDate.toISOString());
-            dnnModal.show(url + "?mid=" + mid + "&sessionId=" + sessionId + "&view=" + isViewer + "&d=" + dateStr, false, 450, 550, true);
+            // Itt az 'id' vagy SessionID (foglaláskor), vagy UserBookingID (lemondáskor)
+            dnnModal.show(url + "?mid=" + mid + "&sessionId=" + id + "&view=" + isViewer + "&d=" + dateStr, false, 450, 550, true);
         }
 
         $("#btn-prev-week").click(function() { if(currentWeekOffset > 0) { currentWeekOffset--; renderCalendar(); } });

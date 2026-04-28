@@ -23,7 +23,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             _bookingManager = new DanceWorkshopBookingManager();
         }
 
-        // --- 1. EZ HIÁNYZOTT: Workshopok listája a legördülő menühöz ---
         [HttpGet]
         [AllowAnonymous]
         [ActionName("WorkshopsList")]
@@ -33,7 +32,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             {
                 using (IDataContext ctx = DataContext.Instance())
                 {
-                    // Lekérjük az összes workshopot, ami ehhez a modulhoz tartozik
                     var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID).ToList();
                     return Request.CreateResponse(HttpStatusCode.OK, workshops);
                 }
@@ -41,7 +39,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
         }
 
-        // --- 2. Naptár adatok (Workshop névvel és szinttel kiegészítve) ---
         [HttpGet]
         [AllowAnonymous]
         [ActionName("SessionsList")]
@@ -55,8 +52,20 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                     var bookings = ctx.GetRepository<DanceWorkshopBooking>().Find("WHERE IsCancelled = 0").ToList();
                     var workshops = ctx.GetRepository<DanceWorkshop>().Get().ToList();
 
+                    // JAVÍTÁS: Megkeressük a bejelentkezett felhasználóhoz tartozó résztvevő ID-t az email címe alapján
+                    int currentParticipantId = -1;
+                    if (UserInfo.UserID > 0)
+                    {
+                        var p = ctx.GetRepository<DanceWorkshopParticipant>().Find("WHERE ParticipantMail = @0", UserInfo.Email).FirstOrDefault();
+                        if (p != null) currentParticipantId = p.ParticipantID;
+                    }
+
                     var result = sessions.Select(s => {
                         var ws = workshops.FirstOrDefault(w => w.WorkshopID == s.WorkshopID);
+
+                        // JAVÍTÁS: A naptár akkor jelzi sajátnak, ha a résztvevő ID-ja egyezik
+                        var userBooking = bookings.FirstOrDefault(b => b.SessionID == s.SessionID && b.CreatedBy == currentParticipantId);
+
                         return new
                         {
                             s.SessionID,
@@ -66,8 +75,7 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                             s.Start,
                             s.Capacity,
                             IsFull = bookings.Count(b => b.SessionID == s.SessionID) >= s.Capacity,
-                            // Csak akkor adjuk vissza a saját foglalást, ha a UserID egyezik (opcionális)
-                            UserBookingID = bookings.FirstOrDefault(b => b.SessionID == s.SessionID && b.CreatedBy == UserInfo.UserID)?.BookingID ?? 0
+                            UserBookingID = userBooking?.BookingID ?? 0
                         };
                     });
                     return Request.CreateResponse(HttpStatusCode.OK, result);
@@ -76,7 +84,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
         }
 
-        // --- 3. Foglalási riport (Helyes név-megjelenítéssel) ---
         [HttpGet]
         [DnnModuleAuthorize(AccessLevel = SecurityAccessLevel.Edit)]
         [ActionName("GetAllBookings")]
@@ -94,7 +101,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                     var result = bookings.Select(b => {
                         var session = sessions.FirstOrDefault(s => s.SessionID == b.SessionID);
                         var workshop = workshops.FirstOrDefault(w => w.WorkshopID == (session?.WorkshopID ?? 0));
-                        // JAVÍTÁS: Mindig a Participant táblából vesszük a nevet a CreatedBy (ami nálunk a ParticipantID) alapján
                         var person = participants.FirstOrDefault(p => p.ParticipantID == b.CreatedBy);
 
                         return new
@@ -102,7 +108,7 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                             b.BookingID,
                             b.IsCancelled,
                             SessionStart = session?.Start,
-                            WorkshopName = workshop?.Name + (workshop != null && !string.IsNullOrEmpty(workshop.Level) ? " (" + workshop.Level + ")" : ""),
+                            WorkshopName = (workshop?.Name ?? "Ismeretlen") + (workshop != null && !string.IsNullOrEmpty(workshop.Level) ? " (" + workshop.Level + ")" : ""),
                             Username = person != null ? person.ParticipantName : "Vendég"
                         };
                     }).OrderByDescending(x => x.SessionStart).ToList();
@@ -113,7 +119,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
         }
 
-        // --- 4. Foglalás létrehozása (Kiss Elek hiba javítása) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         [ActionName("CreateBooking")]
@@ -125,8 +130,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 var booking = new DanceWorkshopBooking
                 {
                     SessionID = request.SessionID,
-                    // JAVÍTÁS: A CreatedBy mezőbe a participantId-t mentjük, 
-                    // így a riport a beküldött nevet (Kiss Elek) fogja mutatni, nem a bejelentkezett admint.
                     CreatedBy = participantId,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -134,6 +137,23 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
             }
             catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.BadRequest, ex.Message); }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("CancelBooking")]
+        public HttpResponseMessage CancelBooking([FromUri] int id)
+        {
+            try
+            {
+                // JAVÍTÁS: 'id' itt a BookingID, így a Guest/User is le tudja mondani a sajátját
+                _bookingManager.CancelBooking(id, UserInfo.UserID, UserInfo.IsSuperUser);
+                return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Request.CreateResponse(HttpStatusCode.BadRequest, new { message = ex.Message });
+            }
         }
 
         [HttpPost]
@@ -166,15 +186,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             }
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        [ActionName("CancelBooking")]
-        public HttpResponseMessage CancelBooking(int id)
-        {
-            _bookingManager.CancelBooking(id, UserInfo.UserID, UserInfo.IsSuperUser);
-            return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
-        }
-
         private int EnsureParticipant(string name, string email, string phone)
         {
             using (IDataContext ctx = DataContext.Instance())
@@ -186,11 +197,19 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                     participant = new DanceWorkshopParticipant { ParticipantName = name, ParticipantMail = email, ParticipantPhone = phone };
                     rep.Insert(participant);
                 }
+                else
+                {
+                    // JAVÍTÁS: Ha a név változott az adott emailhez, frissítjük
+                    participant.ParticipantName = name;
+                    participant.ParticipantPhone = phone;
+                    rep.Update(participant);
+                }
                 return participant.ParticipantID;
             }
         }
     }
 
+    // JAVÍTÁS: Ez az osztály KÖTELEZŐ a namespace-en belül, a hibaüzenet elkerüléséhez!
     public class BookingRequest
     {
         public int SessionID { get; set; }
