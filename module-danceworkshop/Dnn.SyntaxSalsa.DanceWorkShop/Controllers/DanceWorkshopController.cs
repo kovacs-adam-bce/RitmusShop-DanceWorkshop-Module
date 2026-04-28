@@ -2,11 +2,8 @@
 using DotNetNuke.Web.Mvc.Framework.ActionFilters;
 using DotNetNuke.Web.Mvc.Framework.Controllers;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Web.Mvc;
+using DotNetNuke.Security;
 
 namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
 {
@@ -27,20 +24,29 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         }
 
         [HttpGet]
-        public ActionResult Edit()
-        {
+        public ActionResult Edit(int sessionId, bool view = false)
+        { 
+            ViewBag.SessionID = sessionId;
+            ViewBag.IsViewer = view;
+
             return View();
         }
 
         [HttpGet]
-        [DnnModuleAuthorize(AccessLevel = DotNetNuke.Security.SecurityAccessLevel.Edit)]
+        [DnnModuleAuthorize(AccessLevel = SecurityAccessLevel.Edit)]
         public ActionResult Management()
         {
-            return View();
+
+            DateTime fromDate = DateTime.UtcNow;
+            DateTime toDate = fromDate.AddDays(7);
+
+            var bookings = _bookingManager.FindBookingsByDate(fromDate, toDate, true);
+
+            return View(bookings);
         }
 
         [HttpGet]
-        [DnnModuleAuthorize(AccessLevel = DotNetNuke.Security.SecurityAccessLevel.Edit)]
+        [DnnModuleAuthorize(AccessLevel = SecurityAccessLevel.Edit)]
         public ActionResult Settings()
         {
             return View();

@@ -142,16 +142,16 @@
 
 <div id="workshop-calendar-@Dnn.ModuleContext.ModuleId" class="dance-workshop-container">
     <div class="calendar-header">
-        <h2 id="calendar-title"></h2>
+        <h2 id="calendar-title">Naptár betöltése...</h2>
         <div class="calendar-controls">
             <button type="button" id="btn-prev-week" class="dnnSecondaryAction">Előző hét</button>
             <button type="button" id="btn-this-week" class="dnnPrimaryAction">Aktuális hét</button>
             <button type="button" id="btn-next-week" class="dnnSecondaryAction">Következő hét</button>
             <select id="jump-to-week"></select>
 
-            @if (Dnn.ModuleContext.IsEditable)
+            @if (Request.IsAuthenticated && (Dnn.User.IsSuperUser || Dnn.User.IsInRole(Dnn.PortalSettings.AdministratorRoleName) || Dnn.ModuleContext.IsEditable))
             {
-                <a href="@Url.Action("Management", "DanceWorkshop")" class="btn-admin-link">⚙ Admin kontrol</a>
+                <a href="@Url.Action("Management", "DanceWorkshop")" class="btn-admin-link">⚙ Management</a>
             }
         </div>
     </div>
@@ -163,7 +163,9 @@
                     <th style="width: 120px;">Időpont<br /><small>(Helyi / UTC)</small></th>
                 </tr>
             </thead>
-            <tbody id="calendar-slots"></tbody>
+            <tbody id="calendar-slots">
+                <tr><td colspan="8" style="padding: 30px; text-align: center;">Adatok betöltése...</td></tr>
+            </tbody>
         </table>
     </div>
 </div>
@@ -185,7 +187,6 @@
         }
 
         function updateButtonStates() {
-            //  szerinti gombkezelés
             $("#btn-prev-week").prop("disabled", currentWeekOffset <= 0);
             $("#btn-this-week").prop("disabled", currentWeekOffset === 0);
             $("#btn-next-week").prop("disabled", currentWeekOffset >= 52);
@@ -194,7 +195,6 @@
         function populateJumpToWeek() {
             var $select = $("#jump-to-week");
             $select.empty();
-            // 52 hét előre
             for (var i = 0; i <= 52; i++) {
                 var start = getStartOfWeek(i);
                 var label = start.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
@@ -211,7 +211,6 @@
 
             $("#calendar-title").text(start.toLocaleDateString('hu-HU') + " - " + end.toLocaleDateString('hu-HU'));
             $("#calendar-days").find("th:gt(0)").remove();
-            $("#calendar-slots").empty();
 
             for (var i = 0; i < 7; i++) {
                 var d = new Date(start);
@@ -228,10 +227,9 @@
                 data: { year: start.getFullYear(), week: currentWeekOffset },
                 beforeSend: sf.setModuleHeaders
             }).done(function (sessions) {
+                $("#calendar-slots").empty(); // Itt ürítjük ki a táblázatot betöltés után
                 for (var hour = 8; hour <= 20; hour++) {
                     var row = $("<tr>");
-
-                    // UTC idők kijelzése
                     var offset = new Date().getTimezoneOffset() / 60;
                     var utcHour = hour + offset;
                     row.append("<td style='background:#f9f9f9;'><b>" + hour + ":00</b><br/><small>UTC: " + (utcHour < 10 ? "0" + utcHour : utcHour) + ":00</small></td>");
@@ -247,6 +245,8 @@
                     }
                     $("#calendar-slots").append(row);
                 }
+            }).fail(function(xhr) {
+                $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>Hiba: Nem sikerült elérni a szervert. Ellenőrizd a kontroller útvonalát! (Kód: " + xhr.status + ")</td></tr>");
             });
         }
 
@@ -254,44 +254,15 @@
             var now = new Date();
             var diffHours = (slotDate - now) / (1000 * 60 * 60);
 
+            // Megkeressük a session-t (időzóna-független összehasonlítással)
             var session = sessions ? sessions.find(s => new Date(s.Start).getTime() === slotDate.getTime()) : null;
 
-            // 1. Saját foglalás
             if (session && session.UserBookingID > 0) {
                 cell.addClass("dw-slot-own").html("SAJÁT").on("click", function() {
-                    openModal(session.SessionID, true); // Nézegető mód [cite: 29, 152]
+                    openModal(session.SessionID, true, slotDate);
                 });
             }
-            // 2. Múltbeli vagy 24 órán belüli [cite: 22, 27, 127]
             else if (slotDate < now || diffHours < 24) {
                 cell.addClass("dw-slot-past").text(session ? (session.IsFull ? "Betelt" : "Zárt") : "-");
             }
-            // 3. Nincs óra
-            else if (!session) {
-                cell.addClass("dw-slot-none").text("-");
-            }
-            // 4. Betelt [cite: 21, 126]
-            else if (session.IsFull) {
-                cell.addClass("dw-slot-full").text("Betelt");
-            }
-            // 5. Szabad [cite: 21, 129]
-            else {
-                cell.addClass("dw-slot-free").html("SZABAD").on("click", function() {
-                    openModal(session.SessionID, false); // Szerkesztő mód [cite: 23, 140]
-                });
-            }
-        }
-
-        function openModal(sessionId, isViewer) {
-            var url = "@Url.Action("Edit", "DanceWorkshop")";
-            dnnModal.show(url + "?mid=" + mid + "&sessionId=" + sessionId + "&view=" + isViewer, false, 450, 550, true);
-        }
-
-        $("#btn-prev-week").click(function() { if(currentWeekOffset > 0) { currentWeekOffset--; renderCalendar(); } });
-        $("#btn-next-week").click(function() { if(currentWeekOffset < 52) { currentWeekOffset++; renderCalendar(); } });
-        $("#btn-this-week").click(function() { currentWeekOffset = 0; renderCalendar(); });
-        $("#jump-to-week").change(function() { currentWeekOffset = parseInt($(this).val()); renderCalendar(); });
-
-        renderCalendar();
-    });
-</script>
+            else

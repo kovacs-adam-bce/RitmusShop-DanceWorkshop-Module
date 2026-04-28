@@ -3,16 +3,17 @@
 <div class="dnnForm dnnWorkshopEdit" id="workshop-popup">
     <h2 id="modal-title">Időpontfoglalás</h2>
 
+    @* Hibaüzenetek helye - ha a szerver elutasítja a kérést *@
     <div id="validation-summary" class="dnnFormMessage dnnFormValidationSummary" style="display:none;"></div>
 
     <fieldset>
         <div class="dnnFormItem">
             <label>Időpont (Helyi):</label>
-            <strong id="display-local-time"></strong>
+            <strong id="display-local-time">Betöltés...</strong>
         </div>
         <div class="dnnFormItem">
             <label>Időpont (UTC):</label>
-            <strong id="display-utc-time"></strong>
+            <strong id="display-utc-time">Betöltés...</strong>
         </div>
 
         <div class="dnnFormItem">
@@ -28,15 +29,15 @@
 
         <div class="dnnFormItem">
             <label>Résztvevő neve:</label>
-            <input type="text" id="participant-name" class="dnnFormInput" />
+            <input type="text" id="participant-name" class="dnnFormInput" placeholder="Teljes név" />
         </div>
         <div class="dnnFormItem">
             <label>Email cím:</label>
-            <input type="email" id="participant-email" class="dnnFormInput" />
+            <input type="email" id="participant-email" class="dnnFormInput" placeholder="pelda@email.hu" />
         </div>
         <div class="dnnFormItem">
             <label>Telefonszám:</label>
-            <input type="tel" id="participant-phone" class="dnnFormInput" />
+            <input type="tel" id="participant-phone" class="dnnFormInput" placeholder="+36..." />
         </div>
     </fieldset>
 
@@ -55,39 +56,44 @@
         var urlParams = new URLSearchParams(window.location.search);
         var sessionId = parseInt(urlParams.get('sessionId')) || 0;
         var isViewer = urlParams.get('view') === 'true';
+        var dateParam = urlParams.get('d');
 
         var workshopsData = [];
 
+        // 1. Időpontok beállítása URL-ből
+        if (dateParam) {
+            try {
+                var dateObj = new Date(decodeURIComponent(dateParam));
+                $("#display-local-time").text(dateObj.toLocaleString('hu-HU'));
 
-        var selectedDate = window.parent.currentSelectedSlot;
-        if (selectedDate) {
-            var dateObj = new Date(selectedDate);
-            $("#display-local-time").text(dateObj.toLocaleString());
-            $("#display-utc-time").text(dateObj.toUTCString());
+                // UTC formázás: YYYY-MM-DD, HH:00
+                var utcStr = dateObj.toISOString().replace('T', ', ').substring(0, 17);
+                $("#display-utc-time").text(utcStr);
 
-            if (isViewer) {
-
-                $("#modal-title").text("Foglalás – " + dateObj.toISOString().replace('T', ' ').substring(0, 16));
+                if (isViewer) {
+                    $("#modal-title").text("Foglalás – " + utcStr);
+                }
+            } catch (e) {
+                console.error("Dátum formázási hiba", e);
             }
         }
 
-
+        // 2. Workshop lista betöltése
         $.ajax({
             url: apiRoot + "WorkshopsList",
             method: "GET",
             beforeSend: sf.setModuleHeaders
         }).done(function (data) {
             workshopsData = data;
-            var select = $("#workshop-id");
+            var $select = $("#workshop-id");
+            $select.empty();
             $.each(data, function (i, item) {
-                select.append($("<option>").val(item.WorkshopID).text(item.Name));
+                $select.append($("<option>").val(item.WorkshopID).text(item.Name));
             });
+            updateDescription($select.val());
+        }).fail(handleAjaxError);
 
-
-            updateDescription(select.val());
-        });
-
-        $("#workshop-id").change(function() {
+        $("#workshop-id").on("change", function() {
             updateDescription($(this).val());
         });
 
@@ -101,28 +107,36 @@
             }
         }
 
-
+        // 3. Nézegető mód beállítása
         if (isViewer) {
-            $(".dnnFormInput").attr("disabled", "disabled");
+            $(".dnnFormInput").prop("disabled", true);
             $("#btn-main-action").text("Lemondás").addClass("dnnFormWarning");
             $("#btn-close").text("Bezárás");
-
         }
 
+        // 4. Mentés / Lemondás gomb
+        $("#btn-main-action").on("click", function (e) {
+            e.preventDefault();
+            var $btn = $(this);
+            if ($btn.hasClass("disabled")) return;
 
-        $("#btn-main-action").click(function () {
             if (isViewer) {
-
-                if (confirm("Biztosan lemondja ezt a foglalást a workshopra?")) {
+                if (confirm("Biztosan lemondja ezt a foglalást?")) {
+                    $btn.addClass("disabled");
                     $.ajax({
-                        url: apiRoot + "Bookings/Cancel/" + sessionId,
+                        url: apiRoot + "CancelBooking?id=" + sessionId,
                         method: "POST",
                         beforeSend: sf.setModuleHeaders
                     }).done(function() {
                         window.parent.location.reload();
-                    });
+                    }).fail(handleAjaxError);
                 }
             } else {
+                // Validáció küldés előtt
+                if (!$("#participant-name").val() || !$("#participant-email").val()) {
+                    alert("Kérjük, töltse ki a nevet és az email címet!");
+                    return;
+                }
 
                 var bookingData = {
                     SessionID: sessionId,
@@ -131,6 +145,7 @@
                     ParticipantPhone: $("#participant-phone").val()
                 };
 
+                $btn.addClass("disabled");
                 $.ajax({
                     url: apiRoot + "CreateBooking",
                     method: "POST",
@@ -138,26 +153,32 @@
                     beforeSend: sf.setModuleHeaders
                 }).done(function () {
                     window.parent.location.reload();
-                }).fail(function (xhr) {
-
-                    var resp = JSON.parse(xhr.responseText);
-                    var $summary = $("#validation-summary");
-                    $summary.empty().append("<strong>Hiba történt:</strong><ul>");
-
-                    if (resp.validation) {
-                        $.each(resp.validation, function(k, v) {
-                            $summary.append("<li>" + v + "</li>");
-                        });
-                    } else {
-                        $summary.append("<li>" + resp.message + "</li>");
-                    }
-                    $summary.append("</ul>").show();
-                });
+                }).fail(handleAjaxError);
             }
         });
 
-        $("#btn-close").click(function () {
-            window.parent.dnnModal.closePopUp(false);
+        // 5. Mégse / Bezárás gomb javított kezelése
+        $("#btn-close").on("click", function (e) {
+            e.preventDefault();
+            // Biztonságos bezárás DNN modal-ban
+            if (window.parent && window.parent.dnnModal && window.parent.dnnModal.closePopUp) {
+                window.parent.dnnModal.closePopUp(false);
+            } else {
+                window.close(); // Fallback ha nem modal-ban lenne
+            }
         });
+
+        // 6. Közös hibakezelő (undefined ellen)
+        function handleAjaxError(xhr) {
+            $("#btn-main-action").removeClass("disabled");
+            var message = "Hiba történt a művelet során.";
+            try {
+                var resp = JSON.parse(xhr.responseText);
+                message = resp.message || "Hiba: " + xhr.statusText;
+            } catch(err) {
+                message = "Szerverhiba (Kód: " + xhr.status + ")";
+            }
+            $("#validation-summary").empty().append("<strong>Hiba:</strong> " + message).show();
+        }
     });
 </script>
