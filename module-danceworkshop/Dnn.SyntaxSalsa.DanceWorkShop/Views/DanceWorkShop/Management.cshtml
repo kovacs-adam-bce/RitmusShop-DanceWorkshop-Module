@@ -2,7 +2,7 @@
 @using DotNetNuke.Framework.JavaScriptLibraries
 
 @{
-    // Scriptek és AJAX támogatás regisztrációja
+    // Scriptek és AJAX támogatás regisztrációja a 'Sys is not defined' hiba ellen
     JavaScript.RequestRegistration(CommonJs.jQuery);
     JavaScript.RequestRegistration(CommonJs.DnnPlugins);
     DotNetNuke.Framework.ServicesFramework.Instance.RequestAjaxScriptSupport();
@@ -153,6 +153,10 @@
         margin-bottom: 15px;
         border: 2px solid #c9b9a4;
         font-weight: bold;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23c9b9a4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>');
+        background-repeat: no-repeat;
+        background-position: 10px center;
+        padding-left: 35px;
     }
 </style>
 
@@ -163,36 +167,34 @@
     </div>
 
     <div class="mgmt-grid">
-        @* Új Workshop *@
         <div class="mgmt-card">
             <h3>Új Workshop létrehozása</h3>
             <div class="mgmt-form-item">
                 <label>Workshop neve:</label>
-                <input type="text" id="new-ws-name" class="mgmt-input" />
+                <input type="text" id="new-ws-name" class="mgmt-input" placeholder="pl. Salsa" />
             </div>
             <div class="mgmt-form-item">
-                <label>Szint (nehézség):</label>
-                <input type="text" id="new-ws-level" class="mgmt-input" placeholder="pl. Kezdő, Haladó" />
+                <label>Nehézségi szint:</label>
+                <input type="text" id="new-ws-level" class="mgmt-input" placeholder="pl. Kezdő 1" />
             </div>
-            <button type="button" id="btn-save-workshop" class="btn-save-ws">Mentés</button>
+            <button type="button" id="btn-save-workshop" class="btn-save-ws">Workshop mentése</button>
         </div>
 
-        @* Időpont meghirdetése *@
         <div class="mgmt-card">
             <h3>Időpont (Session) meghirdetése</h3>
             <div class="mgmt-form-item">
-                <label>Workshop kiválasztása:</label>
+                <label>Válassz workshopot (Név + Szint):</label>
                 <select id="session-ws-id" class="mgmt-input"></select>
             </div>
             <div class="mgmt-form-item">
-                <label>Kezdés (Csak egész óra!):</label>
-                <input type="datetime-local" id="session-start" class="mgmt-input" />
+                <label>Kezdés (Csak egész óra rögzíthető!):</label>
+                <input type="datetime-local" id="session-start" class="mgmt-input" step="3600" />
             </div>
             <div class="mgmt-form-item">
                 <label>Maximum létszám (fő):</label>
                 <input type="number" id="session-capacity" class="mgmt-input" value="10" min="1" />
             </div>
-            <button type="button" id="btn-save-session" class="btn-save-session">Rögzítés</button>
+            <button type="button" id="btn-save-session" class="btn-save-session">Időpont rögzítése</button>
         </div>
     </div>
 
@@ -223,24 +225,31 @@
         var sf = $.ServicesFramework(mid);
         var apiRoot = sf.getServiceRoot('YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop') + "DanceWorkshopApi/";
 
-        // Eltároljuk a foglalásokat a kliens oldali kereséshez
         var allBookings = [];
 
-        function loadData() {
-            // 1. Workshopok betöltése (Név + Szint formátumban)
+        function loadInitialData() {
+            // 1. Workshopok betöltése a legördülőbe
             $.ajax({
                 url: apiRoot + "WorkshopsList",
                 method: "GET",
                 beforeSend: sf.setModuleHeaders
             }).done(function(data) {
-                var $s = $("#session-ws-id").empty().append("<option value=''>-- Válassz --</option>");
+                console.log("Szervertől érkezett workshopok:", data);
+                var $select = $("#session-ws-id").empty().append("<option value=''>-- Válassz workshopot --</option>");
+
                 $.each(data, function(i, v) {
-                    var displayText = v.Name + (v.Level ? " (" + v.Level + ")" : "");
-                    $s.append($("<option>").val(v.WorkshopID).text(displayText));
+                    // Kezeljük a kis- és nagybetűs mezőneveket is a biztonság kedvéért
+                    var id = v.WorkshopID || v.workshopID;
+                    var name = v.Name || v.name;
+                    var level = v.Level || v.level;
+
+                    var label = name + (level ? " (" + level + ")" : "");
+                    $select.append($("<option>").val(id).text(label));
                 });
+            }).fail(function(xhr) {
+                console.error("Hiba a workshop lista betöltésekor:", xhr);
             });
 
-            // 2. Foglalások betöltése
             fetchBookings();
         }
 
@@ -251,97 +260,86 @@
                 beforeSend: sf.setModuleHeaders
             }).done(function(data) {
                 allBookings = data;
-                renderTable(allBookings);
+                renderBookingTable(allBookings);
             });
         }
 
-        // Táblázat kirajzolása (keresésnél is ezt használjuk)
-        function renderTable(data) {
-            var $b = $("#admin-booking-list").empty();
+        function renderBookingTable(data) {
+            var $tbody = $("#admin-booking-list").empty();
             if(!data || data.length === 0) {
-                $b.append("<tr><td colspan='5' style='text-align:center; padding:20px;'>Nincs megjeleníthető foglalás.</td></tr>");
+                $tbody.append("<tr><td colspan='5' style='text-align:center; padding:20px;'>Nincs megjeleníthető adat.</td></tr>");
                 return;
             }
-            $.each(data, function(i, v) {
-                var s = v.IsCancelled ? "status-cancelled" : "status-active";
-                var dateStr = v.SessionStart ? new Date(v.SessionStart).toLocaleString('hu-HU') : "-";
+            $.each(data, function(i, item) {
+                var s = item.IsCancelled ? "status-cancelled" : "status-active";
+                var dateStr = item.SessionStart ? new Date(item.SessionStart).toLocaleString('hu-HU') : "-";
 
                 var row = "<tr>" +
                     "<td><b>" + dateStr + "</b></td>" +
-                    "<td>" + (v.WorkshopName || "Ismeretlen") + "</td>" +
-                    "<td>" + (v.Username || "Vendég") + "</td>" +
-                    "<td><span class='status-badge " + s + "'>" + (v.IsCancelled ? "Zárt" : "Aktív") + "</span></td>" +
-                    "<td>" + (!v.IsCancelled ? "<button type='button' class='btn-delete' onclick='cancelBooking(" + v.BookingID + ")'>Törlés</button>" : "-") + "</td>" +
+                    "<td>" + (item.WorkshopName || "Ismeretlen") + "</td>" +
+                    "<td>" + (item.Username || "Vendég") + "</td>" +
+                    "<td><span class='status-badge " + s + "'>" + (item.IsCancelled ? "Zárt" : "Aktív") + "</span></td>" +
+                    "<td>" + (!item.IsCancelled ? "<button type='button' class='btn-delete' onclick='cancelBooking(" + item.BookingID + ")'>Törlés</button>" : "-") + "</td>" +
                     "</tr>";
-                $b.append(row);
+                $tbody.append(row);
             });
         }
 
-        // Kliens oldali keresés gépeléskor
         $("#mgmt-search").on("keyup", function() {
-            var searchTerm = $(this).val().toLowerCase();
+            var val = $(this).val().toLowerCase();
             var filtered = allBookings.filter(function(b) {
-                return (b.Username && b.Username.toLowerCase().includes(searchTerm)) ||
-                       (b.WorkshopName && b.WorkshopName.toLowerCase().includes(searchTerm));
+                return (b.Username && b.Username.toLowerCase().includes(val)) ||
+                       (b.WorkshopName && b.WorkshopName.toLowerCase().includes(val));
             });
-            renderTable(filtered);
+            renderBookingTable(filtered);
         });
 
-        // Workshop mentése
         $("#btn-save-workshop").click(function() {
             var name = $("#new-ws-name").val();
             if(!name) { alert("Workshop név kötelező!"); return; }
 
-            var d = { Name: name, Level: $("#new-ws-level").val(), Price: 0, Description: "Admin" };
+            var wsData = { Name: name, Level: $("#new-ws-level").val(), Price: 0, Description: "Admin" };
             $.ajax({
                 url: apiRoot + "SaveWorkshop",
                 method: "POST",
-                data: d,
+                data: wsData,
                 beforeSend: sf.setModuleHeaders
             }).done(function() {
-                alert("Workshop mentve!");
+                alert("Workshop sikeresen mentve!");
                 $("#new-ws-name, #new-ws-level").val("");
-                loadData();
+                // Azonnali újratöltés a dropdown-hoz
+                loadInitialData();
             });
         });
 
-        // Időpont mentése (Validációval és Kapacitással)
         $("#btn-save-session").click(function() {
             var wsId = $("#session-ws-id").val();
-            var start = $("#session-start").val();
+            var startVal = $("#session-start").val();
             var capacity = $("#session-capacity").val();
 
-            if(!wsId || !start) { alert("Válassz workshopot és időpontot!"); return; }
+            if(!wsId || !startVal) { alert("Workshop és kezdési időpont megadása kötelező!"); return; }
 
-            // EGÉSZ ÓRA VALIDÁCIÓ
-            var startDate = new Date(start);
-            if (startDate.getMinutes() !== 0) {
-                alert("Hiba: Csak egész órában kezdődő időpontot rögzíthetsz (pl. 14:00)!");
+            var startDate = new Date(startVal);
+            if(startDate.getMinutes() !== 0) {
+                alert("HIBA: Csak egész órára (pl. 14:00, 15:00) rögzíthetsz időpontot!");
                 return;
             }
 
-            var d = {
-                WorkshopID: wsId,
-                Start: start,
-                Capacity: capacity
-            };
-
+            var sessionData = { WorkshopID: wsId, Start: startVal, Capacity: capacity };
             $.ajax({
                 url: apiRoot + "SaveSession",
                 method: "POST",
-                data: d,
+                data: sessionData,
                 beforeSend: sf.setModuleHeaders
             }).done(function() {
-                alert("Időpont rögzítve!");
+                alert("Időpont sikeresen rögzítve!");
                 $("#session-start").val("");
                 fetchBookings();
-            }).fail(function(xhr) {
-                alert("Hiba a mentés során: " + xhr.status);
             });
         });
 
         window.cancelBooking = function(id) {
-            if(confirm("Biztosan törlöd ezt a foglalást?")) {
+            if(confirm("Biztosan törölni szeretnéd ezt a foglalást?")) {
                 $.ajax({
                     url: apiRoot + "CancelBooking/" + id,
                     method: "POST",
@@ -354,6 +352,6 @@
             }
         };
 
-        loadData();
+        loadInitialData();
     });
 </script>

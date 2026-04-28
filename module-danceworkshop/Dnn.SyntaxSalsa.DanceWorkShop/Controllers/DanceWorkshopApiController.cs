@@ -23,6 +23,25 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
             _bookingManager = new DanceWorkshopBookingManager();
         }
 
+        // --- 1. EZ HIÁNYZOTT: Workshopok listája a legördülő menühöz ---
+        [HttpGet]
+        [AllowAnonymous]
+        [ActionName("WorkshopsList")]
+        public HttpResponseMessage WorkshopsList()
+        {
+            try
+            {
+                using (IDataContext ctx = DataContext.Instance())
+                {
+                    // Lekérjük az összes workshopot, ami ehhez a modulhoz tartozik
+                    var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID).ToList();
+                    return Request.CreateResponse(HttpStatusCode.OK, workshops);
+                }
+            }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
+        }
+
+        // --- 2. Naptár adatok (Workshop névvel és szinttel kiegészítve) ---
         [HttpGet]
         [AllowAnonymous]
         [ActionName("SessionsList")]
@@ -34,37 +53,30 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 {
                     var sessions = ctx.GetRepository<DanceWorkshopSession>().Get().ToList();
                     var bookings = ctx.GetRepository<DanceWorkshopBooking>().Find("WHERE IsCancelled = 0").ToList();
+                    var workshops = ctx.GetRepository<DanceWorkshop>().Get().ToList();
 
-                    var result = sessions.Select(s => new {
-                        s.SessionID,
-                        s.WorkshopID,
-                        s.Start,
-                        s.Capacity,
-                        IsFull = bookings.Count(b => b.SessionID == s.SessionID) >= s.Capacity,
-                        UserBookingID = bookings.FirstOrDefault(b => b.SessionID == s.SessionID && b.CreatedBy == UserInfo.UserID)?.BookingID ?? 0
+                    var result = sessions.Select(s => {
+                        var ws = workshops.FirstOrDefault(w => w.WorkshopID == s.WorkshopID);
+                        return new
+                        {
+                            s.SessionID,
+                            s.WorkshopID,
+                            WorkshopName = ws?.Name ?? "Workshop",
+                            WorkshopLevel = ws?.Level ?? "",
+                            s.Start,
+                            s.Capacity,
+                            IsFull = bookings.Count(b => b.SessionID == s.SessionID) >= s.Capacity,
+                            // Csak akkor adjuk vissza a saját foglalást, ha a UserID egyezik (opcionális)
+                            UserBookingID = bookings.FirstOrDefault(b => b.SessionID == s.SessionID && b.CreatedBy == UserInfo.UserID)?.BookingID ?? 0
+                        };
                     });
                     return Request.CreateResponse(HttpStatusCode.OK, result);
                 }
             }
-            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
         }
 
-        [HttpGet]
-        [AllowAnonymous]
-        [ActionName("WorkshopsList")]
-        public HttpResponseMessage WorkshopsList()
-        {
-            try
-            {
-                using (IDataContext ctx = DataContext.Instance())
-                {
-                    var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID);
-                    return Request.CreateResponse(HttpStatusCode.OK, workshops);
-                }
-            }
-            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
-        }
-
+        // --- 3. Foglalási riport (Helyes név-megjelenítéssel) ---
         [HttpGet]
         [DnnModuleAuthorize(AccessLevel = SecurityAccessLevel.Edit)]
         [ActionName("GetAllBookings")]
@@ -76,12 +88,13 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 {
                     var bookings = ctx.GetRepository<DanceWorkshopBooking>().Get().ToList();
                     var sessions = ctx.GetRepository<DanceWorkshopSession>().Get().ToList();
-                    var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID).ToList();
+                    var workshops = ctx.GetRepository<DanceWorkshop>().Get().ToList();
                     var participants = ctx.GetRepository<DanceWorkshopParticipant>().Get().ToList();
 
                     var result = bookings.Select(b => {
                         var session = sessions.FirstOrDefault(s => s.SessionID == b.SessionID);
                         var workshop = workshops.FirstOrDefault(w => w.WorkshopID == (session?.WorkshopID ?? 0));
+                        // JAVÍTÁS: Mindig a Participant táblából vesszük a nevet a CreatedBy (ami nálunk a ParticipantID) alapján
                         var person = participants.FirstOrDefault(p => p.ParticipantID == b.CreatedBy);
 
                         return new
@@ -89,20 +102,18 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                             b.BookingID,
                             b.IsCancelled,
                             SessionStart = session?.Start,
-                            WorkshopName = workshop?.Name,
-                            Username = person != null ? person.ParticipantName : "Vendég (#" + b.CreatedBy + ")"
+                            WorkshopName = workshop?.Name + (workshop != null && !string.IsNullOrEmpty(workshop.Level) ? " (" + workshop.Level + ")" : ""),
+                            Username = person != null ? person.ParticipantName : "Vendég"
                         };
                     }).OrderByDescending(x => x.SessionStart).ToList();
 
                     return Request.CreateResponse(HttpStatusCode.OK, result);
                 }
             }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
-            }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, ex.Message); }
         }
 
+        // --- 4. Foglalás létrehozása (Kiss Elek hiba javítása) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         [ActionName("CreateBooking")]
@@ -114,13 +125,15 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 var booking = new DanceWorkshopBooking
                 {
                     SessionID = request.SessionID,
-                    CreatedBy = UserInfo.UserID > 0 ? UserInfo.UserID : participantId,
+                    // JAVÍTÁS: A CreatedBy mezőbe a participantId-t mentjük, 
+                    // így a riport a beküldött nevet (Kiss Elek) fogja mutatni, nem a bejelentkezett admint.
+                    CreatedBy = participantId,
                     CreatedAt = DateTime.UtcNow
                 };
-                var result = _bookingManager.CreateBooking(booking, 10);
-                return Request.CreateResponse(HttpStatusCode.OK, result);
+                _bookingManager.CreateBooking(booking, 10);
+                return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
             }
-            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.BadRequest, ex.Message); }
         }
 
         [HttpPost]
@@ -178,6 +191,11 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         }
     }
 
-    // CSAK AKKOR HAGYD ITT, HA MÁSHOL NINCS DEFINIÁLVA!
-    public class BookingRequest { public int SessionID { get; set; } public string ParticipantName { get; set; } public string ParticipantMail { get; set; } public string ParticipantPhone { get; set; } }
+    public class BookingRequest
+    {
+        public int SessionID { get; set; }
+        public string ParticipantName { get; set; }
+        public string ParticipantMail { get; set; }
+        public string ParticipantPhone { get; set; }
+    }
 }

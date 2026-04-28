@@ -1,7 +1,6 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 @using DotNetNuke.Framework.JavaScriptLibraries
 
-@* 1. JAVÍTÁS: Kényszerített regisztráció a betöltési sorrend rögzítéséhez *@
 @{
     JavaScript.RequestRegistration(CommonJs.jQuery);
     JavaScript.RequestRegistration(CommonJs.jQueryMigrate);
@@ -9,7 +8,6 @@
 }
 
 <style>
-    /* A stílusok változatlanok maradnak, mint az előző verziódban */
     .dance-workshop-container {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         color: #413220;
@@ -175,7 +173,6 @@
     $(document).ready(function () {
         var mid = parseInt('@Dnn.ModuleContext.ModuleId');
         var sf = $.ServicesFramework(mid);
-        // 2. JAVÍTÁS: Győződj meg róla, hogy ez a string megegyezik a kontroller [SupportedModules] attribútumával!
         var serviceRoot = 'YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop';
         var apiRoot = sf.getServiceRoot(serviceRoot) + "DanceWorkshopApi/";
         var currentWeekOffset = 0;
@@ -216,7 +213,6 @@
             $("#btn-next-week").prop("disabled", currentWeekOffset >= 52);
             populateJumpToWeek();
 
-            // 3. JAVÍTÁS: Explicit fejléc beállítás a 401-es hiba ellen
             $.ajax({
                 url: apiRoot + "SessionsList",
                 method: "GET",
@@ -241,7 +237,6 @@
                     $("#calendar-slots").append(row);
                 }
             }).fail(function(xhr) {
-                // Részletesebb hibaüzenet a debugoláshoz
                 var errorMsg = xhr.status === 401 ? "Jogosultsági hiba (401). Ellenőrizd a kontroller SupportedModules beállítását!" : "Hiba: " + xhr.status;
                 $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>" + errorMsg + "</td></tr>");
             });
@@ -253,15 +248,23 @@
             var session = sessions ? sessions.find(s => new Date(s.Start).getTime() === slotDate.getTime()) : null;
 
             if (session && session.UserBookingID > 0) {
-                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function() { openModal(session.SessionID, true, slotDate); });
+                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function () { openModal(session.SessionID, true, slotDate); });
             }
             else if (slotDate < now || diffHours < 24) {
                 cell.addClass("dw-slot-past").text(session ? (session.IsFull ? "Betelt" : "Zárt") : "-");
             }
-            else if (!session) { cell.addClass("dw-slot-none").text("-"); }
-            else if (session.IsFull) { cell.addClass("dw-slot-full").text("Betelt"); }
+            else if (!session) {
+                cell.addClass("dw-slot-none").text("-");
+            }
+            else if (session.IsFull) {
+                cell.addClass("dw-slot-full").text("Betelt");
+            }
             else {
-                cell.addClass("dw-slot-free").html("SZABAD").on("click", function() { openModal(session.SessionID, false, slotDate); });
+                var content = "<strong>" + (session.WorkshopName || "SZABAD") + "</strong>";
+                if (session.WorkshopLevel) {
+                    content += "<br/><small>(" + session.WorkshopLevel + ")</small>";
+                }
+                cell.addClass("dw-slot-free").html(content).on("click", function () { openModal(session.SessionID, false, slotDate); });
             }
         }
 

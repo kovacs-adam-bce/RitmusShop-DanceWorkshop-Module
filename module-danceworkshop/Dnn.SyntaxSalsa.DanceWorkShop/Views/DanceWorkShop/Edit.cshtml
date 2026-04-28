@@ -1,7 +1,6 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 @using DotNetNuke.Framework.JavaScriptLibraries
 
-@* DNN Script regisztráció a 'Sys is not defined' hiba és a Modal kezelés miatt *@
 @{
     JavaScript.RequestRegistration(CommonJs.DnnPlugins);
     JavaScript.RequestRegistration(CommonJs.jQuery);
@@ -9,12 +8,9 @@
 
 <div class="dnnForm dnnWorkshopEdit" id="workshop-popup">
     <h2 id="modal-title">Időpontfoglalás</h2>
-
-    @* Hibaüzenetek helye *@
     <div id="validation-summary" class="dnnFormMessage dnnFormValidationSummary" style="display:none;"></div>
 
     <fieldset>
-        @* Időpont kijelzés *@
         <div class="dnnFormItem">
             <label>Időpont (Helyi):</label>
             <strong id="display-local-time">Betöltés...</strong>
@@ -24,20 +20,8 @@
             <strong id="display-utc-time">Betöltés...</strong>
         </div>
 
-        @* Workshop kiválasztása *@
-        <div class="dnnFormItem">
-            <label>Workshop típusa:</label>
-            <select id="workshop-id" class="dnnFormInput dnnFormRequired"></select>
-        </div>
-
-        @* Workshop leírása *@
-        <div id="workshop-desc-area" style="margin: 10px 0; padding: 10px; background: #f1ede8; border-radius: 4px; display:none;">
-            <p id="workshop-description" style="font-size: 0.9em; margin:0;"></p>
-        </div>
-
         <hr />
 
-        @* Résztvevő adatai *@
         <div class="dnnFormItem">
             <label>Résztvevő neve:</label>
             <input type="text" id="participant-name" class="dnnFormInput" placeholder="Teljes név" />
@@ -52,7 +36,6 @@
         </div>
     </fieldset>
 
-    @* Gombok *@
     <ul class="dnnActions dnnClear">
         <li><a id="btn-main-action" class="dnnPrimaryAction">Foglalás</a></li>
         <li><a id="btn-close" class="dnnSecondaryAction">Mégse</a></li>
@@ -63,8 +46,6 @@
     $(document).ready(function () {
         var mid = parseInt('@Dnn.ModuleContext.ModuleId');
         var sf = $.ServicesFramework(mid);
-
-        // KRITIKUS: A te specifikus mappaszerkezetedhez igazított elérési út
         var serviceRoot = 'YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop';
         var apiRoot = sf.getServiceRoot(serviceRoot) + "DanceWorkshopApi/";
 
@@ -73,130 +54,55 @@
         var isViewer = urlParams.get('view') === 'true';
         var dateParam = urlParams.get('d');
 
-        var workshopsData = [];
-
-        // 1. Időpontok beállítása az URL-ben kapott paraméter alapján
         if (dateParam) {
-            try {
-                var dateObj = new Date(decodeURIComponent(dateParam));
-                $("#display-local-time").text(dateObj.toLocaleString('hu-HU'));
-
-                // UTC formázás a specifikáció szerint: YYYY-MM-DD, HH:00
-                var utcStr = dateObj.toISOString().replace('T', ', ').substring(0, 17);
-                $("#display-utc-time").text(utcStr);
-
-                if (isViewer) {
-                    $("#modal-title").text("Foglalás – " + utcStr);
-                }
-            } catch (e) {
-                console.error("Dátum hiba:", e);
-            }
+            var dateObj = new Date(decodeURIComponent(dateParam));
+            $("#display-local-time").text(dateObj.toLocaleString('hu-HU'));
+            var utcStr = dateObj.toISOString().replace('T', ', ').substring(0, 17);
+            $("#display-utc-time").text(utcStr);
+            if (isViewer) $("#modal-title").text("Foglalás – " + utcStr);
         }
 
-        // 2. Workshop lista betöltése
-        $.ajax({
-            url: apiRoot + "WorkshopsList",
-            method: "GET",
-            beforeSend: sf.setModuleHeaders
-        }).done(function (data) {
-            workshopsData = data;
-            var $select = $("#workshop-id");
-            $select.empty();
-            $.each(data, function (i, item) {
-                $select.append($("<option>").val(item.WorkshopID).text(item.Name));
-            });
-            updateDescription($select.val());
-        }).fail(handleAjaxError);
-
-        $("#workshop-id").on("change", function() {
-            updateDescription($(this).val());
-        });
-
-        function updateDescription(id) {
-            var ws = workshopsData.find(x => x.WorkshopID == id);
-            if (ws && ws.Description) {
-                $("#workshop-description").html(ws.Description);
-                $("#workshop-desc-area").show();
-            } else {
-                $("#workshop-desc-area").hide();
-            }
-        }
-
-        // 3. Nézegető (Viewer) mód beállítása (ha már van saját foglalás)
         if (isViewer) {
             $(".dnnFormInput").prop("disabled", true);
             $("#btn-main-action").text("Lemondás").addClass("dnnFormWarning");
             $("#btn-close").text("Bezárás");
         }
 
-        // 4. Foglalás vagy Lemondás beküldése
         $("#btn-main-action").on("click", function (e) {
             e.preventDefault();
             var $btn = $(this);
             if ($btn.hasClass("disabled")) return;
 
             if (isViewer) {
-                // Lemondási folyamat
                 if (confirm("Biztosan lemondja ezt a foglalást?")) {
                     $btn.addClass("disabled");
-                    $.ajax({
-                        url: apiRoot + "CancelBooking?id=" + sessionId,
-                        method: "POST",
-                        beforeSend: sf.setModuleHeaders
-                    }).done(function() {
-                        window.parent.location.reload();
-                    }).fail(handleAjaxError);
+                    $.ajax({ url: apiRoot + "CancelBooking?id=" + sessionId, method: "POST", beforeSend: sf.setModuleHeaders }).done(function() { window.parent.location.reload(); }).fail(handleAjaxError);
                 }
             } else {
-                // Foglalási folyamat validációval
                 var name = $("#participant-name").val();
                 var email = $("#participant-email").val();
-
-                if (!name || !email) {
-                    alert("A név és az email kitöltése kötelező!");
-                    return;
-                }
-
-                var bookingData = {
-                    SessionID: sessionId,
-                    ParticipantName: name,
-                    ParticipantMail: email,
-                    ParticipantPhone: $("#participant-phone").val()
-                };
-
+                if (!name || !email) { alert("A név és az email kitöltése kötelező!"); return; }
+                var bookingData = { SessionID: sessionId, ParticipantName: name, ParticipantMail: email, ParticipantPhone: $("#participant-phone").val() };
                 $btn.addClass("disabled");
-                $.ajax({
-                    url: apiRoot + "CreateBooking",
-                    method: "POST",
-                    data: bookingData,
-                    beforeSend: sf.setModuleHeaders
-                }).done(function () {
-                    window.parent.location.reload();
-                }).fail(handleAjaxError);
+                $.ajax({ url: apiRoot + "CreateBooking", method: "POST", data: bookingData, beforeSend: sf.setModuleHeaders }).done(function () { window.parent.location.reload(); }).fail(handleAjaxError);
             }
         });
 
-        // 5. Mégse / Bezárás gomb kezelése (DNN Modal specifikus)
         $("#btn-close").on("click", function (e) {
             e.preventDefault();
-            if (window.parent && window.parent.dnnModal && window.parent.dnnModal.closePopUp) {
+            if (window.parent && window.parent.dnnModal) {
                 window.parent.dnnModal.closePopUp(false);
+            } else if (window.parent && window.parent.$) {
+                window.parent.$(".ui-dialog-content").dialog("close");
             } else {
                 window.close();
             }
         });
 
-        // 6. Közös hibakezelő az "undefined" hiba elkerülésére
         function handleAjaxError(xhr) {
             $("#btn-main-action").removeClass("disabled");
             var message = "Hiba történt a művelet során.";
-            try {
-                var resp = JSON.parse(xhr.responseText);
-                message = resp.message || "Hiba: " + xhr.statusText;
-            } catch(err) {
-                if (xhr.status === 401) message = "Nincs jogosultsága a művelethez (401).";
-                else message = "Szerverhiba (Kód: " + xhr.status + ")";
-            }
+            try { var resp = JSON.parse(xhr.responseText); message = resp.message || "Hiba: " + xhr.statusText; } catch(err) { }
             $("#validation-summary").empty().append("<strong>Hiba:</strong> " + message).show();
         }
     });
