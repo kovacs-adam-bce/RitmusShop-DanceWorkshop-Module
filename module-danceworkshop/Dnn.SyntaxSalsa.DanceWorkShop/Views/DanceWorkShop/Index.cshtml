@@ -1,7 +1,7 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 
 <style>
-    /* Alap konténer a megadott törtfehér háttérrel */
+    /* Alap konténer */
     .dance-workshop-container {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         color: #413220;
@@ -18,45 +18,54 @@
         margin-bottom: 20px;
         flex-wrap: wrap;
         gap: 15px;
+        border-bottom: 1px solid #c9b9a4;
+        padding-bottom: 15px;
     }
 
         .calendar-header h2 {
             font-weight: 300;
             color: #413220;
-            letter-spacing: 1px;
             margin: 0;
         }
 
-    /* Gombok és a legördülő mező stílusa */
     .calendar-controls {
         display: flex;
         gap: 8px;
         align-items: center;
     }
 
+    /* Gombok stílusa */
     .dnnPrimaryAction, #btn-this-week {
         background-color: #413220 !important;
         border-color: #413220 !important;
         color: white !important;
+        padding: 8px 16px;
         border-radius: 4px;
+        cursor: pointer;
     }
 
     .dnnSecondaryAction {
         background-color: #858e9d !important;
         border-color: #858e9d !important;
         color: white !important;
+        padding: 8px 16px;
         border-radius: 4px;
+        cursor: pointer;
     }
 
     #jump-to-week {
         padding: 6px 12px;
         border: 1px solid #c9b9a4;
         border-radius: 4px;
-        background-color: white;
         color: #413220;
     }
 
-    /* Táblázat a kért középre igazítással */
+    button:disabled {
+        opacity: 0.3 !important;
+        cursor: not-allowed !important;
+    }
+
+    /* Táblázat */
     .calendar-table {
         width: 100%;
         border-collapse: separate;
@@ -67,8 +76,7 @@
         .calendar-table th {
             background: #c9b9a4;
             color: white;
-            padding: 15px 5px;
-            border: none;
+            padding: 12px 5px;
             font-size: 0.85em;
             text-transform: uppercase;
             text-align: center;
@@ -80,24 +88,18 @@
             background: white;
             border: 1px solid #eee;
             border-radius: 4px;
-            transition: all 0.3s ease;
             vertical-align: middle;
             text-align: center;
             padding: 5px;
             font-size: 0.9em;
+            transition: all 0.2s;
         }
 
-    /* Állapotok a paletta alapján */
+    /* KRÉMES SZÍNKÓDOK */
     .dw-slot-past {
         background-color: #f1ede8 !important;
         color: #c9b9a4;
         cursor: not-allowed;
-    }
-
-    .dw-slot-none {
-        background-color: #ffffff !important;
-        color: #e0e0e0;
-        font-style: italic;
     }
 
     .dw-slot-free {
@@ -108,31 +110,49 @@
         cursor: pointer;
     }
 
-        .dw-slot-free:hover {
-            background-color: #858e9d !important;
-            color: white;
-            transform: translateY(-2px);
-        }
-
     .dw-slot-full {
         background-color: #413220 !important;
         color: #f8f8f8;
+        font-weight: normal;
+        cursor: not-allowed;
     }
 
     .dw-slot-own {
         background-color: #c9b9a4 !important;
         color: white;
+        border: 2px solid #413220 !important;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .dw-slot-none {
+        color: #f0f0f0;
+    }
+
+    .btn-admin-link {
+        background-color: #c9b9a4;
+        color: white !important;
+        padding: 8px 12px;
+        border-radius: 4px;
+        text-decoration: none !important;
+        font-size: 0.85em;
+        font-weight: bold;
     }
 </style>
 
 <div id="workshop-calendar-@Dnn.ModuleContext.ModuleId" class="dance-workshop-container">
     <div class="calendar-header">
-        <h2 id="calendar-title">Workshopok</h2>
+        <h2 id="calendar-title"></h2>
         <div class="calendar-controls">
-            <button type="button" id="btn-prev-week" class="dnnSecondaryAction">Előző</button>
-            <button type="button" id="btn-this-week" class="dnnPrimaryAction">Ma</button>
-            <button type="button" id="btn-next-week" class="dnnSecondaryAction">Következő</button>
+            <button type="button" id="btn-prev-week" class="dnnSecondaryAction">Előző hét</button>
+            <button type="button" id="btn-this-week" class="dnnPrimaryAction">Aktuális hét</button>
+            <button type="button" id="btn-next-week" class="dnnSecondaryAction">Következő hét</button>
             <select id="jump-to-week"></select>
+
+            @if (Dnn.ModuleContext.IsEditable)
+            {
+                <a href="@Url.Action("Management", "DanceWorkshop")" class="btn-admin-link">⚙ Admin kontrol</a>
+            }
         </div>
     </div>
 
@@ -140,7 +160,7 @@
         <table class="dnnTable calendar-table">
             <thead>
                 <tr id="calendar-days">
-                    <th style="width: 100px;">Időpont</th>
+                    <th style="width: 120px;">Időpont<br /><small>(Helyi / UTC)</small></th>
                 </tr>
             </thead>
             <tbody id="calendar-slots"></tbody>
@@ -164,10 +184,18 @@
             return monday;
         }
 
+        function updateButtonStates() {
+            //  szerinti gombkezelés
+            $("#btn-prev-week").prop("disabled", currentWeekOffset <= 0);
+            $("#btn-this-week").prop("disabled", currentWeekOffset === 0);
+            $("#btn-next-week").prop("disabled", currentWeekOffset >= 52);
+        }
+
         function populateJumpToWeek() {
             var $select = $("#jump-to-week");
             $select.empty();
-            for (var i = -2; i <= 12; i++) {
+            // 52 hét előre
+            for (var i = 0; i <= 52; i++) {
                 var start = getStartOfWeek(i);
                 var label = start.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
                 var option = $("<option>").val(i).text(label + "-i hét");
@@ -181,7 +209,7 @@
             var end = new Date(start);
             end.setDate(start.getDate() + 6);
 
-            $("#calendar-title").text(start.toLocaleDateString() + " - " + end.toLocaleDateString());
+            $("#calendar-title").text(start.toLocaleDateString('hu-HU') + " - " + end.toLocaleDateString('hu-HU'));
             $("#calendar-days").find("th:gt(0)").remove();
             $("#calendar-slots").empty();
 
@@ -192,16 +220,21 @@
             }
 
             populateJumpToWeek();
+            updateButtonStates();
 
             $.ajax({
                 url: apiRoot + "SessionsList",
                 method: "GET",
-                data: { year: start.getFullYear(), week: 1 },
+                data: { year: start.getFullYear(), week: currentWeekOffset },
                 beforeSend: sf.setModuleHeaders
             }).done(function (sessions) {
                 for (var hour = 8; hour <= 20; hour++) {
                     var row = $("<tr>");
-                    row.append("<td style='background:#f9f9f9;'><b>" + hour + ":00</b></td>");
+
+                    // UTC idők kijelzése
+                    var offset = new Date().getTimezoneOffset() / 60;
+                    var utcHour = hour + offset;
+                    row.append("<td style='background:#f9f9f9;'><b>" + hour + ":00</b><br/><small>UTC: " + (utcHour < 10 ? "0" + utcHour : utcHour) + ":00</small></td>");
 
                     for (var day = 0; day < 7; day++) {
                         var slotDate = new Date(start);
@@ -221,32 +254,41 @@
             var now = new Date();
             var diffHours = (slotDate - now) / (1000 * 60 * 60);
 
-            var session = null;
-            if (sessions && sessions.length) {
-                for (var i = 0; i < sessions.length; i++) {
-                    if (new Date(sessions[i].Start).getTime() === slotDate.getTime()) {
-                        session = sessions[i];
-                        break;
-                    }
-                }
-            }
+            var session = sessions ? sessions.find(s => new Date(s.Start).getTime() === slotDate.getTime()) : null;
 
-            if (slotDate < now || diffHours < 24) {
-                cell.addClass("dw-slot-past").text("Zárt");
-            } else if (!session) {
+            // 1. Saját foglalás
+            if (session && session.UserBookingID > 0) {
+                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function() {
+                    openModal(session.SessionID, true); // Nézegető mód [cite: 29, 152]
+                });
+            }
+            // 2. Múltbeli vagy 24 órán belüli [cite: 22, 27, 127]
+            else if (slotDate < now || diffHours < 24) {
+                cell.addClass("dw-slot-past").text(session ? (session.IsFull ? "Betelt" : "Zárt") : "-");
+            }
+            // 3. Nincs óra
+            else if (!session) {
                 cell.addClass("dw-slot-none").text("-");
-            } else if (session.IsFull) {
+            }
+            // 4. Betelt [cite: 21, 126]
+            else if (session.IsFull) {
                 cell.addClass("dw-slot-full").text("Betelt");
-            } else {
+            }
+            // 5. Szabad [cite: 21, 129]
+            else {
                 cell.addClass("dw-slot-free").html("SZABAD").on("click", function() {
-                    var url = "@Url.Action("Edit", "DanceWorkshop")";
-                    dnnModal.show(url + "?mid=" + mid + "&sessionId=" + session.SessionID, false, 400, 550, true);
+                    openModal(session.SessionID, false); // Szerkesztő mód [cite: 23, 140]
                 });
             }
         }
 
-        $("#btn-prev-week").click(function() { currentWeekOffset--; renderCalendar(); });
-        $("#btn-next-week").click(function() { currentWeekOffset++; renderCalendar(); });
+        function openModal(sessionId, isViewer) {
+            var url = "@Url.Action("Edit", "DanceWorkshop")";
+            dnnModal.show(url + "?mid=" + mid + "&sessionId=" + sessionId + "&view=" + isViewer, false, 450, 550, true);
+        }
+
+        $("#btn-prev-week").click(function() { if(currentWeekOffset > 0) { currentWeekOffset--; renderCalendar(); } });
+        $("#btn-next-week").click(function() { if(currentWeekOffset < 52) { currentWeekOffset++; renderCalendar(); } });
         $("#btn-this-week").click(function() { currentWeekOffset = 0; renderCalendar(); });
         $("#jump-to-week").change(function() { currentWeekOffset = parseInt($(this).val()); renderCalendar(); });
 

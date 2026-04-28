@@ -1,22 +1,48 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 
-<div class="dnnForm dnnWorkshopEdit">
-    <div class="dnnFormItem">
-        <label>Kiválasztott időpont:</label>
-        <strong id="display-date"></strong>
-    </div>
-    <div class="dnnFormItem">
-        <label>Workshop típusa:</label>
-        <select id="workshop-id" class="dnnFormInput dnnFormRequired"></select>
-    </div>
-    <div class="dnnFormItem">
-        <label>Megjegyzés / Név:</label>
-        <input type="text" id="participant-name" class="dnnFormInput" />
-    </div>
+<div class="dnnForm dnnWorkshopEdit" id="workshop-popup">
+    <h2 id="modal-title">Időpontfoglalás</h2>
+
+    <div id="validation-summary" class="dnnFormMessage dnnFormValidationSummary" style="display:none;"></div>
+
+    <fieldset>
+        <div class="dnnFormItem">
+            <label>Időpont (Helyi):</label>
+            <strong id="display-local-time"></strong>
+        </div>
+        <div class="dnnFormItem">
+            <label>Időpont (UTC):</label>
+            <strong id="display-utc-time"></strong>
+        </div>
+
+        <div class="dnnFormItem">
+            <label>Workshop típusa:</label>
+            <select id="workshop-id" class="dnnFormInput dnnFormRequired"></select>
+        </div>
+
+        <div id="workshop-desc-area" style="margin: 10px 0; padding: 10px; background: #f1ede8; border-radius: 4px; display:none;">
+            <p id="workshop-description" style="font-size: 0.9em; margin:0;"></p>
+        </div>
+
+        <hr />
+
+        <div class="dnnFormItem">
+            <label>Résztvevő neve:</label>
+            <input type="text" id="participant-name" class="dnnFormInput" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Email cím:</label>
+            <input type="email" id="participant-email" class="dnnFormInput" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Telefonszám:</label>
+            <input type="tel" id="participant-phone" class="dnnFormInput" />
+        </div>
+    </fieldset>
 
     <ul class="dnnActions dnnClear">
-        <li><a id="save-booking" class="dnnPrimaryAction">Foglalás mentése</a></li>
-        <li><a id="cancel-booking" class="dnnSecondaryAction">Mégse</a></li>
+        <li><a id="btn-main-action" class="dnnPrimaryAction">Foglalás</a></li>
+        <li><a id="btn-close" class="dnnSecondaryAction">Mégse</a></li>
     </ul>
 </div>
 
@@ -26,14 +52,23 @@
         var sf = $.ServicesFramework(mid);
         var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
 
-
         var urlParams = new URLSearchParams(window.location.search);
         var sessionId = parseInt(urlParams.get('sessionId')) || 0;
+        var isViewer = urlParams.get('view') === 'true';
+
+        var workshopsData = [];
 
 
         var selectedDate = window.parent.currentSelectedSlot;
         if (selectedDate) {
-            $("#display-date").text(new Date(selectedDate).toLocaleString());
+            var dateObj = new Date(selectedDate);
+            $("#display-local-time").text(dateObj.toLocaleString());
+            $("#display-utc-time").text(dateObj.toUTCString());
+
+            if (isViewer) {
+
+                $("#modal-title").text("Foglalás – " + dateObj.toISOString().replace('T', ' ').substring(0, 16));
+            }
         }
 
 
@@ -42,32 +77,86 @@
             method: "GET",
             beforeSend: sf.setModuleHeaders
         }).done(function (data) {
+            workshopsData = data;
             var select = $("#workshop-id");
             $.each(data, function (i, item) {
                 select.append($("<option>").val(item.WorkshopID).text(item.Name));
             });
+
+
+            updateDescription(select.val());
         });
 
-        $("#save-booking").click(function () {
-            var bookingData = {
-                SessionID: sessionId,
-                WorkshopID: $("#workshop-id").val(),
-                CreatedAt: new Date().toISOString()
-            };
-
-            $.ajax({
-                url: apiRoot + "Create",
-                method: "POST",
-                data: bookingData,
-                beforeSend: sf.setModuleHeaders
-            }).done(function () {
-                window.parent.location.reload();
-            }).fail(function (xhr) {
-                alert("Hiba: " + xhr.responseText);
-            });
+        $("#workshop-id").change(function() {
+            updateDescription($(this).val());
         });
 
-        $("#cancel-booking").click(function () {
+        function updateDescription(id) {
+            var ws = workshopsData.find(x => x.WorkshopID == id);
+            if (ws && ws.Description) {
+                $("#workshop-description").html(ws.Description);
+                $("#workshop-desc-area").show();
+            } else {
+                $("#workshop-desc-area").hide();
+            }
+        }
+
+
+        if (isViewer) {
+            $(".dnnFormInput").attr("disabled", "disabled");
+            $("#btn-main-action").text("Lemondás").addClass("dnnFormWarning");
+            $("#btn-close").text("Bezárás");
+
+        }
+
+
+        $("#btn-main-action").click(function () {
+            if (isViewer) {
+
+                if (confirm("Biztosan lemondja ezt a foglalást a workshopra?")) {
+                    $.ajax({
+                        url: apiRoot + "Bookings/Cancel/" + sessionId,
+                        method: "POST",
+                        beforeSend: sf.setModuleHeaders
+                    }).done(function() {
+                        window.parent.location.reload();
+                    });
+                }
+            } else {
+
+                var bookingData = {
+                    SessionID: sessionId,
+                    ParticipantName: $("#participant-name").val(),
+                    ParticipantMail: $("#participant-email").val(),
+                    ParticipantPhone: $("#participant-phone").val()
+                };
+
+                $.ajax({
+                    url: apiRoot + "CreateBooking",
+                    method: "POST",
+                    data: bookingData,
+                    beforeSend: sf.setModuleHeaders
+                }).done(function () {
+                    window.parent.location.reload();
+                }).fail(function (xhr) {
+
+                    var resp = JSON.parse(xhr.responseText);
+                    var $summary = $("#validation-summary");
+                    $summary.empty().append("<strong>Hiba történt:</strong><ul>");
+
+                    if (resp.validation) {
+                        $.each(resp.validation, function(k, v) {
+                            $summary.append("<li>" + v + "</li>");
+                        });
+                    } else {
+                        $summary.append("<li>" + resp.message + "</li>");
+                    }
+                    $summary.append("</ul>").show();
+                });
+            }
+        });
+
+        $("#btn-close").click(function () {
             window.parent.dnnModal.closePopUp(false);
         });
     });
