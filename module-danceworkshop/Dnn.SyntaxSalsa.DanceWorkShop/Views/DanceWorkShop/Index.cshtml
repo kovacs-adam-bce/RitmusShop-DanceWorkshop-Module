@@ -1,7 +1,15 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+@using DotNetNuke.Framework.JavaScriptLibraries
+
+@* 1. JAVÍTÁS: Kényszerített regisztráció a betöltési sorrend rögzítéséhez *@
+@{
+    JavaScript.RequestRegistration(CommonJs.jQuery);
+    JavaScript.RequestRegistration(CommonJs.jQueryMigrate);
+    JavaScript.RequestRegistration(CommonJs.DnnPlugins);
+}
 
 <style>
-    /* Alap konténer */
+    /* A stílusok változatlanok maradnak, mint az előző verziódban */
     .dance-workshop-container {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         color: #413220;
@@ -34,10 +42,8 @@
         align-items: center;
     }
 
-    /* Gombok stílusa */
     .dnnPrimaryAction, #btn-this-week {
         background-color: #413220 !important;
-        border-color: #413220 !important;
         color: white !important;
         padding: 8px 16px;
         border-radius: 4px;
@@ -46,7 +52,6 @@
 
     .dnnSecondaryAction {
         background-color: #858e9d !important;
-        border-color: #858e9d !important;
         color: white !important;
         padding: 8px 16px;
         border-radius: 4px;
@@ -65,7 +70,6 @@
         cursor: not-allowed !important;
     }
 
-    /* Táblázat */
     .calendar-table {
         width: 100%;
         border-collapse: separate;
@@ -92,10 +96,8 @@
             text-align: center;
             padding: 5px;
             font-size: 0.9em;
-            transition: all 0.2s;
         }
 
-    /* KRÉMES SZÍNKÓDOK */
     .dw-slot-past {
         background-color: #f1ede8 !important;
         color: #c9b9a4;
@@ -148,7 +150,6 @@
             <button type="button" id="btn-this-week" class="dnnPrimaryAction">Aktuális hét</button>
             <button type="button" id="btn-next-week" class="dnnSecondaryAction">Következő hét</button>
             <select id="jump-to-week"></select>
-
             @if (Request.IsAuthenticated && (Dnn.User.IsSuperUser || Dnn.User.IsInRole(Dnn.PortalSettings.AdministratorRoleName) || Dnn.ModuleContext.IsEditable))
             {
                 <a href="@Url.Action("Management", "DanceWorkshop")" class="btn-admin-link">⚙ Management</a>
@@ -164,7 +165,7 @@
                 </tr>
             </thead>
             <tbody id="calendar-slots">
-                <tr><td colspan="8" style="padding: 30px; text-align: center;">Adatok betöltése...</td></tr>
+                <tr><td colspan="8" style="padding: 30px; text-align: center;">Várakozás az adatokra...</td></tr>
             </tbody>
         </table>
     </div>
@@ -174,7 +175,9 @@
     $(document).ready(function () {
         var mid = parseInt('@Dnn.ModuleContext.ModuleId');
         var sf = $.ServicesFramework(mid);
-        var apiRoot = sf.getServiceRoot('DanceWorkShop') + "DanceWorkshopApi/";
+        // 2. JAVÍTÁS: Győződj meg róla, hogy ez a string megegyezik a kontroller [SupportedModules] attribútumával!
+        var serviceRoot = 'YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop';
+        var apiRoot = sf.getServiceRoot(serviceRoot) + "DanceWorkshopApi/";
         var currentWeekOffset = 0;
 
         function getStartOfWeek(offset) {
@@ -186,22 +189,14 @@
             return monday;
         }
 
-        function updateButtonStates() {
-            $("#btn-prev-week").prop("disabled", currentWeekOffset <= 0);
-            $("#btn-this-week").prop("disabled", currentWeekOffset === 0);
-            $("#btn-next-week").prop("disabled", currentWeekOffset >= 52);
-        }
-
         function populateJumpToWeek() {
             var $select = $("#jump-to-week");
             $select.empty();
             for (var i = 0; i <= 52; i++) {
                 var start = getStartOfWeek(i);
-                var label = start.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
-                var option = $("<option>").val(i).text(label + "-i hét");
-                if (i === currentWeekOffset) option.attr("selected", "selected");
-                $select.append(option);
+                $select.append($("<option>").val(i).text(start.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' }) + "-i hét"));
             }
+            $select.val(currentWeekOffset);
         }
 
         function renderCalendar() {
@@ -211,23 +206,24 @@
 
             $("#calendar-title").text(start.toLocaleDateString('hu-HU') + " - " + end.toLocaleDateString('hu-HU'));
             $("#calendar-days").find("th:gt(0)").remove();
-
             for (var i = 0; i < 7; i++) {
                 var d = new Date(start);
                 d.setDate(start.getDate() + i);
                 $("#calendar-days").append("<th>" + d.toLocaleDateString('hu-HU', { weekday: 'short', month: 'short', day: 'numeric' }) + "</th>");
             }
 
+            $("#btn-prev-week").prop("disabled", currentWeekOffset <= 0);
+            $("#btn-next-week").prop("disabled", currentWeekOffset >= 52);
             populateJumpToWeek();
-            updateButtonStates();
 
+            // 3. JAVÍTÁS: Explicit fejléc beállítás a 401-es hiba ellen
             $.ajax({
                 url: apiRoot + "SessionsList",
                 method: "GET",
                 data: { year: start.getFullYear(), week: currentWeekOffset },
                 beforeSend: sf.setModuleHeaders
             }).done(function (sessions) {
-                $("#calendar-slots").empty(); // Itt ürítjük ki a táblázatot betöltés után
+                $("#calendar-slots").empty();
                 for (var hour = 8; hour <= 20; hour++) {
                     var row = $("<tr>");
                     var offset = new Date().getTimezoneOffset() / 60;
@@ -238,7 +234,6 @@
                         var slotDate = new Date(start);
                         slotDate.setDate(start.getDate() + day);
                         slotDate.setHours(hour, 0, 0, 0);
-
                         var cell = $("<td>").addClass("calendar-cell");
                         applySlotStyle(cell, slotDate, sessions);
                         row.append(cell);
@@ -246,23 +241,41 @@
                     $("#calendar-slots").append(row);
                 }
             }).fail(function(xhr) {
-                $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>Hiba: Nem sikerült elérni a szervert. Ellenőrizd a kontroller útvonalát! (Kód: " + xhr.status + ")</td></tr>");
+                // Részletesebb hibaüzenet a debugoláshoz
+                var errorMsg = xhr.status === 401 ? "Jogosultsági hiba (401). Ellenőrizd a kontroller SupportedModules beállítását!" : "Hiba: " + xhr.status;
+                $("#calendar-slots").html("<tr><td colspan='8' style='color:red; padding:20px;'>" + errorMsg + "</td></tr>");
             });
         }
 
         function applySlotStyle(cell, slotDate, sessions) {
             var now = new Date();
             var diffHours = (slotDate - now) / (1000 * 60 * 60);
-
-            // Megkeressük a session-t (időzóna-független összehasonlítással)
             var session = sessions ? sessions.find(s => new Date(s.Start).getTime() === slotDate.getTime()) : null;
 
             if (session && session.UserBookingID > 0) {
-                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function() {
-                    openModal(session.SessionID, true, slotDate);
-                });
+                cell.addClass("dw-slot-own").html("SAJÁT").on("click", function() { openModal(session.SessionID, true, slotDate); });
             }
             else if (slotDate < now || diffHours < 24) {
                 cell.addClass("dw-slot-past").text(session ? (session.IsFull ? "Betelt" : "Zárt") : "-");
             }
-            else
+            else if (!session) { cell.addClass("dw-slot-none").text("-"); }
+            else if (session.IsFull) { cell.addClass("dw-slot-full").text("Betelt"); }
+            else {
+                cell.addClass("dw-slot-free").html("SZABAD").on("click", function() { openModal(session.SessionID, false, slotDate); });
+            }
+        }
+
+        function openModal(sessionId, isViewer, slotDate) {
+            var url = "@Url.Action("Edit", "DanceWorkshop")";
+            var dateStr = encodeURIComponent(slotDate.toISOString());
+            dnnModal.show(url + "?mid=" + mid + "&sessionId=" + sessionId + "&view=" + isViewer + "&d=" + dateStr, false, 450, 550, true);
+        }
+
+        $("#btn-prev-week").click(function() { if(currentWeekOffset > 0) { currentWeekOffset--; renderCalendar(); } });
+        $("#btn-next-week").click(function() { if(currentWeekOffset < 52) { currentWeekOffset++; renderCalendar(); } });
+        $("#btn-this-week").click(function() { currentWeekOffset = 0; renderCalendar(); });
+        $("#jump-to-week").change(function() { currentWeekOffset = parseInt($(this).val()); renderCalendar(); });
+
+        renderCalendar();
+    });
+</script>

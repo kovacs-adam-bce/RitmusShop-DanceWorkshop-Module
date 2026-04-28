@@ -1,23 +1,17 @@
-﻿using DotNetNuke.Web.Mvc.Routing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using DotNetNuke.Web.Api;
-
+﻿using DotNetNuke.Web.Api;
+using System.Web.Http;
 
 namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop
 {
-    public class RouteMapper : DotNetNuke.Web.Api.IServiceRouteMapper
+    public class RouteMapper : IServiceRouteMapper
     {
-        public void RegisterRoutes(DotNetNuke.Web.Api.IMapRoute mapRouteManager)
+        public void RegisterRoutes(IMapRoute mapRouteManager)
         {
             mapRouteManager.MapHttpRoute(
-                moduleFolderName: "DanceWorkShop",
+                moduleFolderName: "YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop",
                 routeName: "default",
-                url: "{controller}/{action}",
-                defaults: new { },
+                url: "{controller}/{action}/{id}",
+                defaults: new { id = RouteParameter.Optional },
                 namespaces: new[] { "DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers" }
             );
         }
