@@ -1,0 +1,93 @@
+@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+@using DotNetNuke.Framework.JavaScriptLibraries
+@{
+    JavaScript.RequestRegistration(CommonJs.DnnPlugins);
+    JavaScript.RequestRegistration(CommonJs.jQuery);
+}
+
+<div class="dnnForm dnnWorkshopEdit" id="workshop-popup">
+    <h2 id="modal-title">Időpontfoglalás</h2>
+    <div id="validation-summary" class="dnnFormMessage dnnFormValidationSummary" style="display:none;"></div>
+
+    <fieldset>
+        <div class="dnnFormItem">
+            <label>Időpont:</label>
+            <strong id="display-local-time">Betöltés...</strong>
+        </div>
+        <hr />
+        <div class="dnnFormItem">
+            <label>Résztvevő neve:</label>
+            <input type="text" id="participant-name" class="dnnFormInput" placeholder="Teljes név" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Email cím:</label>
+            <input type="email" id="participant-email" class="dnnFormInput" placeholder="pelda@email.hu" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Telefonszám:</label>
+            <input type="tel" id="participant-phone" class="dnnFormInput" placeholder="+36..." />
+        </div>
+    </fieldset>
+
+    <ul class="dnnActions dnnClear">
+        <li><a id="btn-main-action" class="dnnPrimaryAction">Megerősítés</a></li>
+        @* A Mégse / Bezárás gombok eltávolítva *@
+    </ul>
+</div>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        var mid = parseInt('@Dnn.ModuleContext.ModuleId');
+        var sf = $.ServicesFramework(mid);
+        var apiRoot = sf.getServiceRoot('YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop') + "DanceWorkshopApi/";
+
+        var urlParams = new URLSearchParams(window.location.search);
+        var id = parseInt(urlParams.get('sessionId')) || 0;
+        var isViewer = urlParams.get('view') === 'true';
+        var dateParam = urlParams.get('d');
+
+        if (dateParam) {
+            $("#display-local-time").text(new Date(decodeURIComponent(dateParam)).toLocaleString('hu-HU'));
+        }
+
+        if (isViewer) {
+            $("#modal-title").text("Foglalás lemondása");
+            $("#btn-main-action").text("Lemondás megerősítése").addClass("dnnFormWarning");
+            $(".dnnFormInput").prop("disabled", true);
+        }
+
+        $("#btn-main-action").on("click", function (e) {
+            e.preventDefault();
+            if (isViewer) {
+                if (confirm("Biztosan lemondja ezt a foglalást?")) {
+                    $.ajax({
+                        url: apiRoot + "CancelBooking/" + id,
+                        method: "POST",
+                        beforeSend: sf.setModuleHeaders
+                    }).done(function() {
+                        alert("Sikeresen lemondva!");
+                        window.parent.location.reload();
+                    });
+                }
+            } else {
+                var bookingData = {
+                    SessionID: id,
+                    ParticipantName: $("#participant-name").val(),
+                    ParticipantMail: $("#participant-email").val(),
+                    ParticipantPhone: $("#participant-phone").val()
+                };
+                if (!bookingData.ParticipantName || !bookingData.ParticipantMail) { alert("Név és email kötelező!"); return; }
+
+                $.ajax({
+                    url: apiRoot + "CreateBooking",
+                    method: "POST",
+                    data: bookingData,
+                    beforeSend: sf.setModuleHeaders
+                }).done(function () {
+                    alert("Köszönjük! A foglalásod sikeresen rögzítettük.");
+                    window.parent.location.reload();
+                });
+            }
+        });
+    });
+</script>

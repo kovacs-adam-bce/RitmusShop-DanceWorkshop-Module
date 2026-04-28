@@ -1,0 +1,111 @@
+<dotnetnuke type="Package" version="5.0">
+	<packages>
+		<package name="Dnn.SyntaxSalsa.DanceWorkShop" type="Module" version="00.00.01">
+			<friendlyName>Dance Workshop Calendar</friendlyName>
+			<description>Profi naptár és foglalási rendszer táncstúdiók számára.</description>
+			<iconFile>~/Icons/Sigma/Software_32X32_Standard.png</iconFile>
+			<owner>
+				<name>SyntaxSalsa</name>
+				<organization>SyntaxSalsa</organization>
+				<url>http://www.dnndev.me/</url>
+				<email>adam.kovacs3@stud.uni-corvinus.hu</email>
+			</owner>
+			<license src="License.txt"></license>
+			<releaseNotes src="ReleaseNotes.txt"></releaseNotes>
+			<dependencies>
+				<dependency type="CoreVersion">09.08.00</dependency>
+			</dependencies>
+			<components>
+				<component type="Script">
+					<scripts>
+						<basePath>DesktopModules\MVC\Dnn.SyntaxSalsa.DanceWorkShop</basePath>
+						<script type="Install">
+							<path>Providers\DataProviders\SqlDataProvider</path>
+							<name>00.00.01.SqlDataProvider</name>
+							<version>00.00.01</version>
+						</script>
+						<script type="UnInstall">
+							<path>Providers\DataProviders\SqlDataProvider</path>
+							<name>Uninstall.SqlDataProvider</name>
+							<version>00.00.01</version>
+						</script>
+					</scripts>
+				</component>
+				<component type="ResourceFile">
+					<resourceFiles>
+						<basePath>DesktopModules/MVC/Dnn.SyntaxSalsa.DanceWorkShop</basePath>
+						<resourceFile>
+							<name>Resources.zip</name>
+						</resourceFile>
+					</resourceFiles>
+				</component>
+				<component type="Module">
+					<desktopModule>
+						<moduleName>Dnn.SyntaxSalsa.DanceWorkShop</moduleName>
+						<foldername>Dnn.SyntaxSalsa.DanceWorkShop</foldername>
+						<businessControllerClass />
+						<supportedFeatures />
+						<moduleDefinitions>
+							<moduleDefinition>
+								<friendlyName>Dance Workshop</friendlyName>
+								<defaultCacheTime>0</defaultCacheTime>
+								<moduleControls>
+									<moduleControl>
+										<controlKey />
+										<controlSrc>DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers/DanceWorkshop/Index.mvc</controlSrc>
+										<supportsPartialRendering>False</supportsPartialRendering>
+										<controlTitle />
+										<controlType>View</controlType>
+										<iconFile />
+										<helpUrl />
+										<viewOrder>0</viewOrder>
+									</moduleControl>
+									<moduleControl>
+										<controlKey>Edit</controlKey>
+										<controlSrc>DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers/DanceWorkshop/Edit.mvc</controlSrc>
+										<supportsPartialRendering>False</supportsPartialRendering>
+										<controlTitle>Workshop foglalása</controlTitle>
+										<controlType>Edit</controlType>
+										<iconFile />
+										<helpUrl />
+										<viewOrder>0</viewOrder>
+										<supportsPopUps>True</supportsPopUps>
+									</moduleControl>
+									<moduleControl>
+										<controlKey>Management</controlKey>
+										<controlSrc>DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers/DanceWorkshop/Management.mvc</controlSrc>
+										<supportsPartialRendering>False</supportsPartialRendering>
+										<controlTitle>Workshopok kezelése</controlTitle>
+										<controlType>Edit</controlType>
+										<iconFile />
+										<helpUrl />
+										<viewOrder>0</viewOrder>
+										<supportsPopUps>True</supportsPopUps>
+									</moduleControl>
+									<moduleControl>
+										<controlKey>Settings</controlKey>
+										<controlSrc>DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers/Settings/Settings.mvc</controlSrc>
+										<supportsPartialRendering>False</supportsPartialRendering>
+										<controlTitle>Modul beállítások</controlTitle>
+										<controlType>Edit</controlType>
+										<iconFile />
+										<helpUrl />
+										<viewOrder>0</viewOrder>
+									</moduleControl>
+								</moduleControls>
+							</moduleDefinition>
+						</moduleDefinitions>
+					</desktopModule>
+				</component>
+				<component type="Assembly">
+					<assemblies>
+						<assembly>
+							<name>Dnn.SyntaxSalsa.DanceWorkShop.dll</name>
+							<path>bin</path>
+						</assembly>
+					</assemblies>
+				</component>
+			</components>
+		</package>
+	</packages>
+</dotnetnuke>

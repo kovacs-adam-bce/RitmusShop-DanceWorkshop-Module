@@ -1,0 +1,23 @@
+﻿@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage<IEnumerable<DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Models.Item>>
+
+<div id="Items-@Dnn.ModuleContext.ModuleId">
+    @if (Model == null || !Model.Any())
+    {
+        <p>Nincsenek megjeleníthető minta elemek. (Ez a sablon alapértelmezett nézete.)</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var item in Model)
+            {
+                <li>@item.ItemName</li>
+            }
+        </ul>
+    }
+
+    <hr />
+    <div style="background: #fff3cd; padding: 15px; border: 1px solid #ffeeba;">
+        <strong>Fejlesztői üzenet:</strong> Ez még a sablon alapértelmezett nézete.
+        A naptárhoz menj a modul beállításaiba, és válaszd a <strong>DanceWorkshop / Index</strong> nézetet!
+    </div>
+</div>

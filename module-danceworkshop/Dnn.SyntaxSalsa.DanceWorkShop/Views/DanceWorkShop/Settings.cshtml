@@ -1,0 +1,22 @@
+@inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
+
+<div class="dnnForm dnnWorkshopSettings">
+    <fieldset>
+        <div class="dnnFormItem">
+            <label>Alapértelmezett kapacitás:</label>
+            <input type="number" id="setting-default-capacity" class="dnnFormInput" value="10" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Lemondási határidő (óra):</label>
+            <input type="number" id="setting-cancel-threshold" class="dnnFormInput" value="24" />
+        </div>
+        <div class="dnnFormItem">
+            <label>Értesítési e-mail cím:</label>
+            <input type="email" id="setting-admin-email" class="dnnFormInput" />
+        </div>
+    </fieldset>
+</div>
+
+<script type="text/javascript">
+    // A DNN Settings automatikusan kezeli a mentést, ha a modul megfelelően van regisztrálva
+</script>

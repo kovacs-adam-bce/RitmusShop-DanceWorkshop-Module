@@ -1,0 +1,100 @@
+﻿/************************************************************/
+/***** SqlDataProvider                     *****/
+/***** *****/
+/***** Note: To manually execute this script you must   *****/
+/***** perform a search and replace operation     *****/
+/***** for {databaseOwner} and {objectQualifier}  *****/
+/***** *****/
+/************************************************************/
+
+
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopBookings]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopBookings]
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopSessions]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopSessions]
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshops]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshops]
+GO
+
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'{databaseOwner}[{objectQualifier}DanceWorkshopParticipants]') AND type in (N'U'))
+DROP TABLE {databaseOwner}[{objectQualifier}DanceWorkshopParticipants]
+GO
+
+
+
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshops
+(
+    [WorkshopID] INT NOT NULL IDENTITY (1, 1),
+    [ModuleId] INT NOT NULL, -- DNN instanciák szétválasztásához [cite: 1606]
+    [Name] NVARCHAR(255) NOT NULL,
+    [Description] NVARCHAR(MAX) NULL, -- HTML formázott szöveg [cite: 161]
+    [Price] INT NOT NULL,
+    [Level] NVARCHAR(100) NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshops] PRIMARY KEY CLUSTERED ([WorkshopID])
+) ON [PRIMARY]
+GO
+
+
+
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions
+(
+    [SessionID] INT NOT NULL IDENTITY (1, 1),
+    [WorkshopID] INT NOT NULL,
+    [Start] DATETIME NOT NULL, -- UTC-ben tárolva! [cite: 138, 163]
+    [Capacity] INT NOT NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopSessions] PRIMARY KEY CLUSTERED ([SessionID])
+) ON [PRIMARY]
+GO
+
+
+
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopParticipants
+(
+    [ParticipantID] INT NOT NULL IDENTITY (1, 1),
+    [ParticipantName] NVARCHAR(255) NOT NULL,
+    [ParticipantMail] NVARCHAR(255) NOT NULL,
+    [ParticipantPhone] NVARCHAR(50) NULL,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopParticipants] PRIMARY KEY CLUSTERED ([ParticipantID])
+) ON [PRIMARY]
+GO
+
+
+
+CREATE TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings
+(
+    [BookingID] INT NOT NULL IDENTITY (1, 1),
+    [CreatedBy] INT NOT NULL, -- FK a Participants táblára [cite: 165]
+    [SessionID] INT NOT NULL, -- FK a Sessions táblára [cite: 165]
+    [CreatedAt] DATETIME NOT NULL DEFAULT GETDATE(),
+    [IsCancelled] BIT NOT NULL DEFAULT 0,
+    CONSTRAINT [PK_{objectQualifier}DanceWorkshopBookings] PRIMARY KEY CLUSTERED ([BookingID])
+) ON [PRIMARY]
+GO
+
+
+
+
+ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopSessions ADD CONSTRAINT
+    FK_{objectQualifier}DanceWorkshopSessions_DanceWorkshops FOREIGN KEY ([WorkshopID]) 
+    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshops ([WorkshopID]) ON DELETE CASCADE
+GO
+
+
+ALTER TABLE {databaseOwner}{objectQualifier}DanceWorkshopBookings ADD CONSTRAINT
+    FK_{objectQualifier}DanceWorkshopBookings_Sessions FOREIGN KEY ([SessionID]) 
+    REFERENCES {databaseOwner}{objectQualifier}DanceWorkshopSessions ([SessionID])
+GO
+
+
+
+
+CREATE INDEX [IX_{objectQualifier}DanceWorkshops_ModuleId] ON {databaseOwner}{objectQualifier}DanceWorkshops ([ModuleId])
+GO
+
+CREATE INDEX [IX_{objectQualifier}DanceWorkshopSessions_Start] ON {databaseOwner}{objectQualifier}DanceWorkshopSessions ([Start])
+GO
