@@ -1,10 +1,11 @@
 @inherits DotNetNuke.Web.Mvc.Framework.DnnWebViewPage
 @using DotNetNuke.Framework.JavaScriptLibraries
 
-
 @{
-    JavaScript.RequestRegistration(CommonJs.DnnPlugins);
+    // Scriptek és AJAX támogatás regisztrációja
     JavaScript.RequestRegistration(CommonJs.jQuery);
+    JavaScript.RequestRegistration(CommonJs.DnnPlugins);
+    DotNetNuke.Framework.ServicesFramework.Instance.RequestAjaxScriptSupport();
 }
 
 <style>
@@ -147,6 +148,12 @@
         padding: 4px 8px;
         border-radius: 4px;
     }
+
+    #mgmt-search {
+        margin-bottom: 15px;
+        border: 2px solid #c9b9a4;
+        font-weight: bold;
+    }
 </style>
 
 <div class="mgmt-container">
@@ -156,28 +163,34 @@
     </div>
 
     <div class="mgmt-grid">
+        @* Új Workshop *@
         <div class="mgmt-card">
-            <h3>Új Workshop</h3>
+            <h3>Új Workshop létrehozása</h3>
             <div class="mgmt-form-item">
                 <label>Workshop neve:</label>
                 <input type="text" id="new-ws-name" class="mgmt-input" />
             </div>
             <div class="mgmt-form-item">
-                <label>Szint:</label>
-                <input type="text" id="new-ws-level" class="mgmt-input" />
+                <label>Szint (nehézség):</label>
+                <input type="text" id="new-ws-level" class="mgmt-input" placeholder="pl. Kezdő, Haladó" />
             </div>
             <button type="button" id="btn-save-workshop" class="btn-save-ws">Mentés</button>
         </div>
 
+        @* Időpont meghirdetése *@
         <div class="mgmt-card">
-            <h3>Időpont meghirdetése</h3>
+            <h3>Időpont (Session) meghirdetése</h3>
             <div class="mgmt-form-item">
-                <label>Workshop:</label>
+                <label>Workshop kiválasztása:</label>
                 <select id="session-ws-id" class="mgmt-input"></select>
             </div>
             <div class="mgmt-form-item">
-                <label>Kezdés:</label>
+                <label>Kezdés (Csak egész óra!):</label>
                 <input type="datetime-local" id="session-start" class="mgmt-input" />
+            </div>
+            <div class="mgmt-form-item">
+                <label>Maximum létszám (fő):</label>
+                <input type="number" id="session-capacity" class="mgmt-input" value="10" min="1" />
             </div>
             <button type="button" id="btn-save-session" class="btn-save-session">Rögzítés</button>
         </div>
@@ -185,17 +198,21 @@
 
     <div class="mgmt-table-section">
         <h3>Foglalási riport</h3>
+        <input type="text" id="mgmt-search" class="mgmt-input" placeholder="Keresés résztvevő neve alapján..." />
+
         <table class="mgmt-table">
             <thead>
                 <tr>
                     <th>Időpont</th>
-                    <th>Workshop</th>
+                    <th>Workshop (Szint)</th>
                     <th>Résztvevő</th>
                     <th>Állapot</th>
                     <th>Műveletek</th>
                 </tr>
             </thead>
-            <tbody id="admin-booking-list"></tbody>
+            <tbody id="admin-booking-list">
+                <tr><td colspan="5" style="text-align:center; padding:20px;">Adatok betöltése...</td></tr>
+            </tbody>
         </table>
     </div>
 </div>
@@ -206,57 +223,134 @@
         var sf = $.ServicesFramework(mid);
         var apiRoot = sf.getServiceRoot('YourRFProject/module-danceworkshop/Dnn.SyntaxSalsa.DanceWorkShop') + "DanceWorkshopApi/";
 
-        function loadData() {
+        // Eltároljuk a foglalásokat a kliens oldali kereséshez
+        var allBookings = [];
 
-            $.ajax({ url: apiRoot + "WorkshopsList", method: "GET", beforeSend: sf.setModuleHeaders }).done(function(data) {
+        function loadData() {
+            // 1. Workshopok betöltése (Név + Szint formátumban)
+            $.ajax({
+                url: apiRoot + "WorkshopsList",
+                method: "GET",
+                beforeSend: sf.setModuleHeaders
+            }).done(function(data) {
                 var $s = $("#session-ws-id").empty().append("<option value=''>-- Válassz --</option>");
-                $.each(data, function(i, v) { $s.append($("<option>").val(v.WorkshopID).text(v.Name)); });
+                $.each(data, function(i, v) {
+                    var displayText = v.Name + (v.Level ? " (" + v.Level + ")" : "");
+                    $s.append($("<option>").val(v.WorkshopID).text(displayText));
+                });
             });
 
+            // 2. Foglalások betöltése
+            fetchBookings();
+        }
 
-            $.ajax({ url: apiRoot + "GetAllBookings", method: "GET", beforeSend: sf.setModuleHeaders }).done(function(data) {
-                var $b = $("#admin-booking-list").empty();
-                if(!data || data.length === 0) {
-                    $b.append("<tr><td colspan='5' style='text-align:center; padding:20px;'>Nincs foglalás.</td></tr>");
-                    return;
-                }
-                $.each(data, function(i, v) {
-                    var s = v.IsCancelled ? "status-cancelled" : "status-active";
-                    $b.append("<tr><td>"+new Date(v.SessionStart).toLocaleString('hu-HU')+"</td><td>"+v.WorkshopName+"</td><td>"+v.Username+"</td><td><span class='status-badge "+s+"'>"+(v.IsCancelled ? "Zárt" : "Aktív")+"</span></td><td>"+(!v.IsCancelled ? "<button class='btn-delete' onclick='cancelBooking(" + v.BookingID + ")'>Törlés</button>" : "-")+"</td></tr>");
-                });
+        function fetchBookings() {
+            $.ajax({
+                url: apiRoot + "GetAllBookings",
+                method: "GET",
+                beforeSend: sf.setModuleHeaders
+            }).done(function(data) {
+                allBookings = data;
+                renderTable(allBookings);
             });
         }
 
+        // Táblázat kirajzolása (keresésnél is ezt használjuk)
+        function renderTable(data) {
+            var $b = $("#admin-booking-list").empty();
+            if(!data || data.length === 0) {
+                $b.append("<tr><td colspan='5' style='text-align:center; padding:20px;'>Nincs megjeleníthető foglalás.</td></tr>");
+                return;
+            }
+            $.each(data, function(i, v) {
+                var s = v.IsCancelled ? "status-cancelled" : "status-active";
+                var dateStr = v.SessionStart ? new Date(v.SessionStart).toLocaleString('hu-HU') : "-";
 
+                var row = "<tr>" +
+                    "<td><b>" + dateStr + "</b></td>" +
+                    "<td>" + (v.WorkshopName || "Ismeretlen") + "</td>" +
+                    "<td>" + (v.Username || "Vendég") + "</td>" +
+                    "<td><span class='status-badge " + s + "'>" + (v.IsCancelled ? "Zárt" : "Aktív") + "</span></td>" +
+                    "<td>" + (!v.IsCancelled ? "<button type='button' class='btn-delete' onclick='cancelBooking(" + v.BookingID + ")'>Törlés</button>" : "-") + "</td>" +
+                    "</tr>";
+                $b.append(row);
+            });
+        }
+
+        // Kliens oldali keresés gépeléskor
+        $("#mgmt-search").on("keyup", function() {
+            var searchTerm = $(this).val().toLowerCase();
+            var filtered = allBookings.filter(function(b) {
+                return (b.Username && b.Username.toLowerCase().includes(searchTerm)) ||
+                       (b.WorkshopName && b.WorkshopName.toLowerCase().includes(searchTerm));
+            });
+            renderTable(filtered);
+        });
+
+        // Workshop mentése
         $("#btn-save-workshop").click(function() {
             var name = $("#new-ws-name").val();
-            if(!name) { alert("A név kötelező!"); return; }
+            if(!name) { alert("Workshop név kötelező!"); return; }
+
             var d = { Name: name, Level: $("#new-ws-level").val(), Price: 0, Description: "Admin" };
-            $.ajax({ url: apiRoot + "SaveWorkshop", method: "POST", data: d, beforeSend: sf.setModuleHeaders }).done(function() {
+            $.ajax({
+                url: apiRoot + "SaveWorkshop",
+                method: "POST",
+                data: d,
+                beforeSend: sf.setModuleHeaders
+            }).done(function() {
                 alert("Workshop mentve!");
                 $("#new-ws-name, #new-ws-level").val("");
                 loadData();
             });
         });
 
-
+        // Időpont mentése (Validációval és Kapacitással)
         $("#btn-save-session").click(function() {
             var wsId = $("#session-ws-id").val();
             var start = $("#session-start").val();
+            var capacity = $("#session-capacity").val();
+
             if(!wsId || !start) { alert("Válassz workshopot és időpontot!"); return; }
 
-            var d = { WorkshopID: wsId, Start: start, Capacity: 10 };
-            $.ajax({ url: apiRoot + "SaveSession", method: "POST", data: d, beforeSend: sf.setModuleHeaders }).done(function() {
+            // EGÉSZ ÓRA VALIDÁCIÓ
+            var startDate = new Date(start);
+            if (startDate.getMinutes() !== 0) {
+                alert("Hiba: Csak egész órában kezdődő időpontot rögzíthetsz (pl. 14:00)!");
+                return;
+            }
+
+            var d = {
+                WorkshopID: wsId,
+                Start: start,
+                Capacity: capacity
+            };
+
+            $.ajax({
+                url: apiRoot + "SaveSession",
+                method: "POST",
+                data: d,
+                beforeSend: sf.setModuleHeaders
+            }).done(function() {
                 alert("Időpont rögzítve!");
                 $("#session-start").val("");
-                loadData();
+                fetchBookings();
+            }).fail(function(xhr) {
+                alert("Hiba a mentés során: " + xhr.status);
             });
         });
 
-
         window.cancelBooking = function(id) {
             if(confirm("Biztosan törlöd ezt a foglalást?")) {
-                $.ajax({ url: apiRoot + "CancelBooking/" + id, method: "POST", beforeSend: sf.setModuleHeaders }).done(function() { loadData(); });
+                $.ajax({
+                    url: apiRoot + "CancelBooking/" + id,
+                    method: "POST",
+                    beforeSend: sf.setModuleHeaders
+                }).done(function() {
+                    fetchBookings();
+                }).fail(function(xhr) {
+                    alert("Hiba a törlés során: " + xhr.status);
+                });
             }
         };
 

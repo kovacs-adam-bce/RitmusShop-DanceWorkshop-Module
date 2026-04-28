@@ -12,7 +12,6 @@ using System.Web.Http;
 
 namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
 {
-    // KRITIKUS: Ennek a névnek egyeznie kell a .dnn fájlban lévő DesktopModule/ModuleName értékkel!
     [SupportedModules("Dnn.SyntaxSalsa.DanceWorkShop")]
     [DnnModuleAuthorize(AccessLevel = SecurityAccessLevel.View)]
     public class DanceWorkshopApiController : DnnApiController
@@ -44,14 +43,10 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                         IsFull = bookings.Count(b => b.SessionID == s.SessionID) >= s.Capacity,
                         UserBookingID = bookings.FirstOrDefault(b => b.SessionID == s.SessionID && b.CreatedBy == UserInfo.UserID)?.BookingID ?? 0
                     });
-
                     return Request.CreateResponse(HttpStatusCode.OK, result);
                 }
             }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
-            }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
         }
 
         [HttpGet]
@@ -67,10 +62,7 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                     return Request.CreateResponse(HttpStatusCode.OK, workshops);
                 }
             }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
-            }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
         }
 
         [HttpGet]
@@ -80,9 +72,30 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         {
             try
             {
-                // A manageren keresztül kérjük le az összes foglalást az admin riport számára
-                var bookings = _bookingManager.FindBookingsByDate(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow.AddDays(90), true);
-                return Request.CreateResponse(HttpStatusCode.OK, bookings);
+                using (IDataContext ctx = DataContext.Instance())
+                {
+                    var bookings = ctx.GetRepository<DanceWorkshopBooking>().Get().ToList();
+                    var sessions = ctx.GetRepository<DanceWorkshopSession>().Get().ToList();
+                    var workshops = ctx.GetRepository<DanceWorkshop>().Get(ActiveModule.ModuleID).ToList();
+                    var participants = ctx.GetRepository<DanceWorkshopParticipant>().Get().ToList();
+
+                    var result = bookings.Select(b => {
+                        var session = sessions.FirstOrDefault(s => s.SessionID == b.SessionID);
+                        var workshop = workshops.FirstOrDefault(w => w.WorkshopID == (session?.WorkshopID ?? 0));
+                        var person = participants.FirstOrDefault(p => p.ParticipantID == b.CreatedBy);
+
+                        return new
+                        {
+                            b.BookingID,
+                            b.IsCancelled,
+                            SessionStart = session?.Start,
+                            WorkshopName = workshop?.Name,
+                            Username = person != null ? person.ParticipantName : "Vendég (#" + b.CreatedBy + ")"
+                        };
+                    }).OrderByDescending(x => x.SessionStart).ToList();
+
+                    return Request.CreateResponse(HttpStatusCode.OK, result);
+                }
             }
             catch (Exception ex)
             {
@@ -107,14 +120,7 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
                 var result = _bookingManager.CreateBooking(booking, 10);
                 return Request.CreateResponse(HttpStatusCode.OK, result);
             }
-            catch (DanceWorkshopException ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.BadRequest, new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
-            }
+            catch (Exception ex) { return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message }); }
         }
 
         [HttpPost]
@@ -123,19 +129,12 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         [ActionName("SaveWorkshop")]
         public HttpResponseMessage SaveWorkshop(DanceWorkshop workshop)
         {
-            try
+            using (IDataContext ctx = DataContext.Instance())
             {
-                using (IDataContext ctx = DataContext.Instance())
-                {
-                    var rep = ctx.GetRepository<DanceWorkshop>();
-                    if (workshop.WorkshopID > 0) rep.Update(workshop);
-                    else { workshop.ModuleId = ActiveModule.ModuleID; rep.Insert(workshop); }
-                    return Request.CreateResponse(HttpStatusCode.OK, workshop);
-                }
-            }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
+                var rep = ctx.GetRepository<DanceWorkshop>();
+                if (workshop.WorkshopID > 0) rep.Update(workshop);
+                else { workshop.ModuleId = ActiveModule.ModuleID; rep.Insert(workshop); }
+                return Request.CreateResponse(HttpStatusCode.OK, workshop);
             }
         }
 
@@ -145,19 +144,12 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         [ActionName("SaveSession")]
         public HttpResponseMessage SaveSession(DanceWorkshopSession session)
         {
-            try
+            using (IDataContext ctx = DataContext.Instance())
             {
-                using (IDataContext ctx = DataContext.Instance())
-                {
-                    var rep = ctx.GetRepository<DanceWorkshopSession>();
-                    if (session.SessionID > 0) rep.Update(session);
-                    else { rep.Insert(session); }
-                    return Request.CreateResponse(HttpStatusCode.OK, session);
-                }
-            }
-            catch (Exception ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.InternalServerError, new { message = ex.Message });
+                var rep = ctx.GetRepository<DanceWorkshopSession>();
+                if (session.SessionID > 0) rep.Update(session);
+                else rep.Insert(session);
+                return Request.CreateResponse(HttpStatusCode.OK, session);
             }
         }
 
@@ -166,15 +158,8 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         [ActionName("CancelBooking")]
         public HttpResponseMessage CancelBooking(int id)
         {
-            try
-            {
-                _bookingManager.CancelBooking(id, UserInfo.UserID, UserInfo.IsSuperUser);
-                return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
-            }
-            catch (DanceWorkshopException ex)
-            {
-                return Request.CreateResponse(HttpStatusCode.BadRequest, new { message = ex.Message });
-            }
+            _bookingManager.CancelBooking(id, UserInfo.UserID, UserInfo.IsSuperUser);
+            return Request.CreateResponse(HttpStatusCode.OK, new { success = true });
         }
 
         private int EnsureParticipant(string name, string email, string phone)
@@ -193,5 +178,6 @@ namespace DanceWorkShop_Dnn.Dnn.SyntaxSalsa.DanceWorkShop.Controllers
         }
     }
 
+    // CSAK AKKOR HAGYD ITT, HA MÁSHOL NINCS DEFINIÁLVA!
     public class BookingRequest { public int SessionID { get; set; } public string ParticipantName { get; set; } public string ParticipantMail { get; set; } public string ParticipantPhone { get; set; } }
 }
