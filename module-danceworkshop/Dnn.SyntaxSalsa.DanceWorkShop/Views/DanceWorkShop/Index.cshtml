@@ -36,8 +36,9 @@
 
     .calendar-controls {
         display: flex;
-        gap: 8px;
+        gap: 10px;
         align-items: center;
+        flex-wrap: nowrap;
     }
 
     .dnnPrimaryAction, #btn-this-week {
@@ -45,16 +46,26 @@
         color: white !important;
         padding: 8px 16px;
         border-radius: 4px;
+        white-space: nowrap;
         cursor: pointer;
     }
 
     .dnnSecondaryAction {
-        background-color: #858e9d !important;
+        background: #856e54 !important;
+        background-image: none !important;
         color: white !important;
+        width: auto;
+        min-width: fit-content !important;
         padding: 8px 16px;
         border-radius: 4px;
         cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.2s
     }
+
+        .dnnSecondaryAction:hover {
+            background: #6d5941 !important;
+        }
 
     #jump-to-week {
         padding: 6px 12px;
@@ -137,6 +148,10 @@
         text-decoration: none !important;
         font-size: 0.85em;
         font-weight: bold;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
     }
 </style>
 
